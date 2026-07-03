@@ -41,7 +41,7 @@ async function queryCompanyRAG(userQuery, currentUserId = null) {
   // 1. Evaluate user query intent
   let isConversational = false;
   try {
-    const classificationPrompt = `Analyze the following user query and classify it as either "GENERAL" (greetings, conversational chit-chat, general programming help, math, writing code, or generic assistance) or "RAG" (inquiring about company documents, policies, employee benefits, IT security guidelines, device protocols, business travel rules, expense reimbursement, or specific custom files).
+    const classificationPrompt = `Analyze the following user query and classify it as either "GENERAL" (greetings, conversational chit-chat, general programming help, math, or writing code) or "RAG" (inquiring about company documents, policies, employee benefits, IT security guidelines, device protocols, business travel rules, expense reimbursement, specific custom files, or any general knowledge/factual queries).
 
 User Query: "${userQuery}"
 

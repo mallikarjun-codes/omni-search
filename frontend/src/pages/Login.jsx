@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Bot, Mail, Lock, User, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export default function Login({ onAuthSuccess }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -15,8 +16,8 @@ export default function Login({ onAuthSuccess }) {
     setLoading(true);
 
     const url = isRegister 
-      ? 'http://localhost:5000/api/auth/register' 
-      : 'http://localhost:5000/api/auth/login';
+      ? `${API_BASE}/api/auth/register` 
+      : `${API_BASE}/api/auth/login`;
     
     const payload = isRegister 
       ? { name, email: username, password } 

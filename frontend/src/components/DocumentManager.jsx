@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE } from '../config';
 import { 
   FileText, 
   Trash2, 
@@ -29,7 +30,7 @@ export default function DocumentManager({ user }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:5000/api/documents', {
+      const res = await fetch(`${API_BASE}/api/documents`, {
         headers: {
           'Authorization': 'Bearer ' + localStorage.getItem('token')
         }
@@ -131,7 +132,7 @@ export default function DocumentManager({ user }) {
     const token = localStorage.getItem('token');
     const xhr = new XMLHttpRequest();
 
-    xhr.open('POST', 'http://localhost:5000/api/documents/upload');
+    xhr.open('POST', `${API_BASE}/api/documents/upload`);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
     // Track upload progress
@@ -184,7 +185,7 @@ export default function DocumentManager({ user }) {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch(`http://localhost:5000/api/documents/${id}`, {
+      const res = await fetch(`${API_BASE}/api/documents/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': 'Bearer ' + localStorage.getItem('token')

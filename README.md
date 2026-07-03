@@ -1,110 +1,138 @@
-# 🚀 Omni-Search: Smart Corporate RAG Bot
+# 🚀 OmniSearch — Multi-Tenant Hybrid RAG & Conversational SaaS Workspace
 
-[![Stack: Node.js + Express](https://img.shields.io/badge/Backend-Node.js%20%2F%20Express-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
-[![Stack: React + Vite](https://img.shields.io/badge/Frontend-React%20%2F%20Vite-61DAFB?style=for-the-badge&logo=react)](https://react.dev/)
-[![Stack: Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
-[![LLM: Google Gemini API](https://img.shields.io/badge/AI-Google%20Gemini%20API-4285F4?style=for-the-badge&logo=google-gemini)](https://ai.google.dev/)
-[![Database: In--Memory Vector DB](https://img.shields.io/badge/Database-In--Memory%20Vector%20DB-FF6F61?style=for-the-badge)](https://github.com/mallikarjun-codes/omni-search)
-
-A production-grade, highly secure **Retrieval-Augmented Generation (RAG)** application. It provides authenticated corporate employees with accurate, context-shielded answers derived strictly from official company policies (e.g., HR, IT, and travel guidelines) via the Google Gemini API.
+OmniSearch is a production-grade, highly secure **Multi-Tenant Hybrid RAG (Retrieval-Augmented Generation) & Conversational SaaS Workspace**. Built to meet the scaling demands of modern enterprises, it seamlessly connects a responsive React-Vite dashboard with a secure Node.js/Express API. It implements rigorous multi-tenant data isolation, secure vector searches via Pinecone Serverless with a local zero-dependency database fallback, real-time PDF byte streaming parsing, and a self-healing LLM fallback route utilizing Google's Gemini models.
 
 ---
 
-## 🏗️ High-Level Architecture
+## 🏗️ Architectural Overview
 
-Omni-Search bridges a responsive React frontend with a secure Node.js backend using a custom, zero-dependency local vector database.
+OmniSearch is designed with a decoupled frontend-backend architecture structured to guarantee secure data ingestion and low-latency querying.
 
+### 1. Ingestion Pipeline
 ```mermaid
-graph TD
-    Client[React SPA Dashboard] <-->|HTTPS + JWT| Express[Express App API Gateway]
-    Express <--> Auth[JWT / bcrypt Authentication]
-    Express <--> Ingest[Ingestion Controller]
-    Express <--> RAG[RAG Inference Service]
-    IngestionDocs[(Raw Policy Docs)] --> Ingest
-    Ingest -->|Paragraph Chunking & Embeddings| DB[(Local Vector DB Singleton)]
-    RAG -->|Semantic Query & Retrieval| DB
-    RAG <-->|Gemini API SDK Client| Gemini[Google Gemini model fallback chain]
+flowchart LR
+    A[React Client File Upload] -->|Multipart-Form / PDF Bytes| B[Express Ingestion Gateway]
+    B -->|pdf-parse In-Memory Stream| C[PDF Text Extractor]
+    C -->|Semantic Paragraph Chunking| D[Gemini Embeddings Service]
+    D -->|text-embedding-004 / 3072-dim| E[Multi-Tenant Router]
+    E -->|Tenant Metadata Isolation| F[Pinecone Serverless Index]
+    E -->|Sync Memory Backup| G[LocalVectorDB Singleton]
 ```
 
-### 💻 Stack Breakdown
-* **Frontend**: React (Vite-powered Single Page Application) styled with custom Tailwind CSS utilizing a premium dark glassmorphism aesthetic.
-* **Backend**: Node.js & Express RESTful API with CORS policies and pre-flight handling explicitly configured.
-* **Authentication**: JSON Web Tokens (JWT) for route protection and `bcryptjs` for secure password hashing.
-* **Vector Store**: A lightweight, zero-dependency `LocalVectorDB` class implementing paragraph-level chunking, cosine similarity scoring, and embedded-vector retrieval.
-* **AI & Embeddings**: Official `@google/genai` SDK orchestrating both embedding generation (`gemini-embedding-001` or `text-embedding-004`) and context-restricted prompt response generation.
+* **Ingestion Steps**:
+  1. Users drag-and-drop a PDF on the React Dashboard.
+  2. The raw PDF bytes are streamed to `/api/documents/upload` via `multer`.
+  3. `pdf-parse` extracts the textual data from the file buffer without saving intermediate files onto disk.
+  4. The extracted document is broken down into semantic chunks with a configurable overlapping window.
+  5. The chunks are processed by Google's `text-embedding-004` (falling back to `gemini-embedding-001`) to generate 3072-dimensional vector representations.
+  6. The vectors are upserted into the **Pinecone Serverless Index** (or a local in-memory fallback database) with metadata fields like `user_id` to enforce strict isolation.
+
+### 2. Query Engine & Intent Routing
+```mermaid
+flowchart TD
+    UserQuery[User Input Query] --> IntentRouter[Intent Router / Classifier]
+    
+    IntentRouter -->|GENERAL Intent| GenCompletion[Parametric Gemini Completion]
+    IntentRouter -->|RAG Intent| ContextRetrieval[Context-Injected RAG Pipeline]
+    
+    ContextRetrieval --> EmbeddingGen[Generate Query Embedding]
+    EmbeddingGen --> PineconeQuery[Retrieve Matching Chunks via Pinecone / Local DB]
+    PineconeQuery --> ContextLimiter[Context Limiter & Strict Prompter]
+    ContextLimiter --> LLMCompletion[Self-Healing LLM Generation]
+    
+    GenCompletion --> ClientResponse[Unified Workspace Chat UI]
+    LLMCompletion --> ClientResponse
+```
+
+* **Intent Routing Steps**:
+  1. The user's query is intercepted by the **Intent Router** classifier.
+  2. The router runs a fast classification prompt through Gemini to determine if the query has a **GENERAL** (conversational chit-chat, greetings, coding, math) or **RAG** (inquiring about company policies, benefits, travel, expense) intent.
+  3. If **GENERAL**, the system routes to a parametric baseline completion.
+  4. If **RAG**, the system executes a semantic search across Pinecone / Local Vector DB, filters matching items by the active user's ID, injects the retrieved context, and applies strict containment rules (*"I am sorry, but I do not have access to that information..."* if context is insufficient).
 
 ---
 
-## ✨ Core Features
+## ✨ Core Features Highlight
 
-* **🛡️ Hardened JWT Protection & CORS Shielding**
-  All chat, upload, and querying endpoints are strictly guarded by JWT authorization middleware. CORS policies restrict connections exclusively to approved origins with automated pre-flight caching.
-* **⚡ Zero-Dependency Local Vector Storage**
-  No external database is required. Features a local in-memory vector store running cosine similarity algorithms on query vectors against chunked corporate documents.
-* **🔄 Resilient Fallback Gemini Model Network**
-  Robust connection management featuring an automated model fallback chain (`gemini-1.5-flash` ➡️ `gemini-2.5-flash` ➡️ `gemini-3.5-flash`) to guarantee request fulfillment even during model-specific high demand, quotas, or version transitions.
-* **📜 Smart Context-Limiting Constraints**
-  Prompts are structurally bound to answer questions *only* if matching context chunks are available. If information cannot be confidently retrieved, the LLM safely responds with a standardized fallback message: *"I am sorry, but I do not have access to that information in the official company documents."*
+* **💬 Multi-Chat Thread Management**
+  An interactive, persistence-backed session navigation tree allows users to create, switch, and delete chat conversations. Chats and message logs are saved and loaded dynamically from the database.
+* **🛡️ Multi-Tenant Database Isolation**
+  Database tables (`chats`, `messages`, `documents`) are isolated utilizing strict foreign key constraints linked to user ids. User-uploaded files are only accessible to their respective tenants.
+* **🔒 Data Privacy Vector Filters**
+  During vector indexing and lookup, queries specify the user metadata filter (`user_id` must match `currentUserId` OR public `system`). This keeps proprietary document context strictly segregated across tenants.
+* **📄 True PDF Byte Streaming & Parsing**
+  Implements real-time PDF parsing direct from binary buffers using a custom class implementation of `pdf-parse`. Files are parsed in-memory, avoiding local disk caching and enhancing privacy compliance.
+* **🔄 Self-Healing LLM Fallback Routing**
+  Resilient model connection chain guarantees uptime. The service automatically rotates through model options (`gemini-2.5-flash` ➡️ `gemini-1.5-flash` ➡️ `gemini-3.5-flash`) if quota limits or HTTP timeouts are reached.
 
 ---
 
-## 🚀 Quick Start Guide
+## 🛠️ Setup & Installation Instructions
+
+Follow these instructions to run the full-stack workspace locally.
 
 ### 📋 Prerequisites
-Make sure you have [Node.js](https://nodejs.org/) (v18+) and `npm` installed.
+- **Node.js** (v18 or higher)
+- **npm** (v9 or higher)
+- **PostgreSQL Database** (running locally or hosted)
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/mallikarjun-codes/omni-search.git
-cd omni-search
-```
+### 1. Set Up the Local PostgreSQL Database
+1. Launch your local PostgreSQL instance (e.g., pgAdmin, Docker, or native service).
+2. Create a new database named `postgres` (or modify your credentials in the environment setup).
+3. The database tables (`users`, `chats`, `messages`, `documents`, and `vectors`) will be automatically created and verified by the backend server on startup.
 
-### 2. Configure the Backend Environment
-Create a `.env` file under the `/backend` directory:
+### 2. Configure the Environment Variables
+Create a file named `.env` in the `/backend` folder:
 ```bash
 # e.g., e:/omni-search/backend/.env
 PORT=5000
 JWT_SECRET=super_secret_company_rag_jwt_key_2026
-GEMINI_API_KEY=your_actual_gemini_api_key_here
-```
 
-### 3. Install Dependencies
-Install all orchestrator and service packages from the root workspace folder:
+# AI & Vector Credentials
+GEMINI_API_KEY=your_gemini_api_key_here
+PINECONE_API_KEY=your_pinecone_api_key_here
+
+# PostgreSQL Database Credentials
+PGHOST=localhost
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=your_postgres_password_here
+PGDATABASE=postgres
+```
+*Note: If `PINECONE_API_KEY` is left blank, the system automatically falls back to utilizing the high-performance local vector database singleton.*
+
+### 3. Install Workspace Dependencies
+Execute the following command in the **root** folder:
 ```bash
-# Installs root-level dependencies (concurrently)
+# Installs concurrently in the root and links the sub-folders
 npm install
-
-# Installs backend-specific dependencies
-npm install --prefix backend
-
-# Installs frontend-specific dependencies
-npm install --prefix frontend
 ```
 
-### 4. Run the Application
-Start both the Express backend and React frontend concurrently with a single command from the root directory:
+### 4. Launch the Workspace
+To start both the Express backend API server and Vite frontend dev server concurrently, run:
 ```bash
 npm run dev
 ```
-
-* Backend will spin up at **[http://localhost:5000](http://localhost:5000)**.
-* Frontend will open at **[http://localhost:5173](http://localhost:5173)**.
+Once launched:
+- **Frontend App**: [http://localhost:5173](http://localhost:5173) (Locks reliably with `strictPort`)
+- **Backend API Gateway**: [http://localhost:5000](http://localhost:5000) (Strict CORS restricted to port 5173)
 
 ---
 
-## 🧪 Running Verification Tests
+## 🧪 Automated Testing
 
-Omni-Search contains a comprehensive local validation and integration test suite to run inside the `/backend` directory:
+Verify the security parameters, vector search performance, and API route protection policies with our test suite.
 
-* **Vector Database & Embeddings Pipeline**:
-  ```bash
-  npm run --prefix backend test-vector
-  ```
-* **Core RAG Inference Constraints**:
+Run these scripts from the `/backend` directory:
+* **Core RAG Logic Validation**:
   ```bash
   npm run --prefix backend test-rag
   ```
-* **End-to-End Server REST API Integration**:
+* **PDF Parse & Database Ingestion Testing**:
+  ```bash
+  npm run --prefix backend test-pdf-db
+  ```
+* **End-to-End API Routes Integration Verification**:
   ```bash
   npm run --prefix backend test-api
   ```

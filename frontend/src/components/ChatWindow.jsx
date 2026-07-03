@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { API_BASE } from '../config';
 import { Send, Bot, User, Sparkles, BookOpen, ChevronDown, ChevronUp, MessageSquarePlus } from 'lucide-react';
 
 export default function ChatWindow({ chatId, onChatCreated }) {
@@ -27,7 +28,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/chats/${chatId}/messages`, {
+        const res = await fetch(`${API_BASE}/api/chats/${chatId}/messages`, {
           headers: {
             'Authorization': 'Bearer ' + localStorage.getItem("token")
           }
@@ -66,7 +67,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/chat/query', {
+      const res = await fetch(`${API_BASE}/api/chat/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

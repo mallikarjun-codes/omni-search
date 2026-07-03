@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ChatWindow from '../components/ChatWindow';
+import { API_BASE } from '../config';
 import ProfileView from '../components/ProfileView';
 import DocumentManager from '../components/DocumentManager';
 import { 
@@ -38,7 +39,7 @@ export default function Dashboard({ user, onLogout }) {
   // Fetch document metadata list
   const fetchDocuments = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/chat/documents', {
+      const res = await fetch(`${API_BASE}/api/chat/documents`, {
         headers: {
           'Authorization': 'Bearer ' + localStorage.getItem("token")
         }
@@ -55,7 +56,7 @@ export default function Dashboard({ user, onLogout }) {
   // Fetch user's historical chat sessions
   const fetchChats = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/chats', {
+      const res = await fetch(`${API_BASE}/api/chats`, {
         headers: {
           'Authorization': 'Bearer ' + localStorage.getItem("token")
         }
@@ -82,7 +83,7 @@ export default function Dashboard({ user, onLogout }) {
   const handleCreateChat = async () => {
     try {
       const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const res = await fetch('http://localhost:5000/api/chats', {
+      const res = await fetch(`${API_BASE}/api/chats`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,7 +114,7 @@ export default function Dashboard({ user, onLogout }) {
   // Handle deleting targeted chat session thread
   const handleDeleteChat = async (idToDelete) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/chats/${idToDelete}`, {
+      const res = await fetch(`${API_BASE}/api/chats/${idToDelete}`, {
         method: 'DELETE',
         headers: {
           'Authorization': 'Bearer ' + localStorage.getItem("token")
@@ -144,7 +145,7 @@ export default function Dashboard({ user, onLogout }) {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/chat/document', {
+      const res = await fetch(`${API_BASE}/api/chat/document`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
