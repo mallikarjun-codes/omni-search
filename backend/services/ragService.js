@@ -51,11 +51,8 @@ Constraint: If the answer cannot be confidently derived from the provided contex
       }
     } catch (error) {
       lastError = error;
-      if (error.status === 404 || error.message.includes('not found') || error.message.includes('404')) {
-        console.warn(`[ragService] Model ${model} is not supported/accessible. Trying fallback...`);
-        continue;
-      }
-      throw error; // Re-throw other errors (e.g. invalid API key, network, rate limits)
+      console.warn(`[ragService] Model ${model} failed: ${error.message || error}. Trying fallback...`);
+      continue;
     }
   }
 
