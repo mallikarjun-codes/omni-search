@@ -71,7 +71,7 @@ export default function ChatWindow({ messages, onSendMessage, loading }) {
           </div>
         ) : (
           messages.map((msg, index) => {
-            const isUser = msg.role === 'user';
+            const isUser = msg.sender === 'user';
             return (
               <div key={index} className={`flex gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
                 {/* Bot Icon */}
@@ -151,7 +151,7 @@ export default function ChatWindow({ messages, onSendMessage, loading }) {
             
             <div className="glass-card text-slate-200 rounded-2xl rounded-tl-none px-5 py-4 flex flex-col gap-2">
               <span className="text-xs text-slate-400 font-mono flex items-center gap-2">
-                Searching knowledge base...
+                AI is searching documents...
               </span>
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="w-2.5 h-2.5 rounded-full bg-brand-500 dot-bounce" style={{ animationDelay: '0ms' }}></div>

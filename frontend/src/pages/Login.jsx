@@ -4,7 +4,7 @@ import { Bot, Mail, Lock, User, ArrowRight, ShieldCheck, HelpCircle } from 'luci
 export default function Login({ onAuthSuccess }) {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,8 +19,8 @@ export default function Login({ onAuthSuccess }) {
       : 'http://localhost:5000/api/auth/login';
     
     const payload = isRegister 
-      ? { name, email, password } 
-      : { email, password };
+      ? { name, email: username, password } 
+      : { email: username, password };
 
     try {
       const response = await fetch(url, {
@@ -36,9 +36,9 @@ export default function Login({ onAuthSuccess }) {
       }
 
       // Success
-      localStorage.setItem('rag_token', data.token);
-      localStorage.setItem('rag_user', JSON.stringify(data.user));
-      onAuthSuccess(data.user);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      onAuthSuccess(data.token, data.user);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -96,15 +96,17 @@ export default function Login({ onAuthSuccess }) {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">Corporate Email</label>
+            <label className="text-xs font-semibold text-slate-300">
+              {isRegister ? 'Corporate Email' : 'Username'}
+            </label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@ourcompany.com"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={isRegister ? "you@ourcompany.com" : "you@ourcompany.com or username"}
                 className="w-full glass-input rounded-xl py-3 pl-11 pr-4 text-sm text-slate-100 placeholder-slate-600 focus:outline-none"
               />
             </div>

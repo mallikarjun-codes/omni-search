@@ -19,9 +19,10 @@ export default function Dashboard() {
   // Fetch document metadata list
   const fetchDocuments = async () => {
     try {
-      const token = localStorage.getItem('rag_token');
       const res = await fetch('http://localhost:5000/api/chat/documents', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem("token")
+        }
       });
       const data = await res.json();
       if (res.ok) {
@@ -39,48 +40,38 @@ export default function Dashboard() {
   // Handle Query Submission
   const handleSendMessage = async (queryText) => {
     // 1. Add employee message to state
-    const newUserMessage = { role: 'user', text: queryText };
+    const newUserMessage = { sender: 'user', text: queryText };
     setMessages(prev => [...prev, newUserMessage]);
     setChatLoading(true);
 
     try {
-      const token = localStorage.getItem('rag_token');
-      
-      // Structure history for Gemini context (matching API expected format)
-      // Send messages before the current user prompt
-      const formattedHistory = messages.map(msg => ({
-        role: msg.role,
-        content: msg.text
-      }));
-
       const res = await fetch('http://localhost:5000/api/chat/query', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': 'Bearer ' + localStorage.getItem("token")
         },
         body: JSON.stringify({
-          query: queryText,
-          history: formattedHistory
+          query: queryText
         })
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || 'Error processing request');
+        throw new Error(data.error || data.message || 'Error processing request');
       }
 
-      // 2. Add assistant message and source references to state
+      // 2. Add assistant message to state
       setMessages(prev => [...prev, {
-        role: 'assistant',
+        sender: 'bot',
         text: data.answer,
-        sources: data.sources
+        sources: data.sources || []
       }]);
 
     } catch (err) {
       setMessages(prev => [...prev, {
-        role: 'assistant',
+        sender: 'bot',
         text: `⚠️ Error: Could not retrieve answer. ${err.message}`
       }]);
     } finally {
@@ -102,12 +93,11 @@ export default function Dashboard() {
     }
 
     try {
-      const token = localStorage.getItem('rag_token');
       const res = await fetch('http://localhost:5000/api/chat/document', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': 'Bearer ' + localStorage.getItem("token")
         },
         body: JSON.stringify({
           title: newTitle.trim(),

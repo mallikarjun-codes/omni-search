@@ -4,33 +4,44 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 
 export default function App() {
+  const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Load auth state on mount
   useEffect(() => {
-    const token = localStorage.getItem('rag_token');
-    const storedUser = localStorage.getItem('rag_user');
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
     
-    if (token && storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (err) {
-        // Corrupted storage
-        localStorage.removeItem('rag_token');
-        localStorage.removeItem('rag_user');
+    if (storedToken) {
+      setToken(storedToken);
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (err) {
+          // Corrupted storage
+          localStorage.removeItem('user');
+        }
       }
+    } else {
+      localStorage.removeItem('user');
     }
     setLoading(false);
   }, []);
 
-  const handleAuthSuccess = (userData) => {
-    setUser(userData);
+  const handleAuthSuccess = (newToken, userData) => {
+    localStorage.setItem('token', newToken);
+    setToken(newToken);
+    if (userData) {
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+    }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('rag_token');
-    localStorage.removeItem('rag_user');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setToken(null);
     setUser(null);
   };
 
@@ -57,7 +68,7 @@ export default function App() {
         
         {/* Content */}
         <main className="flex-1">
-          {user ? (
+          {token ? (
             <Dashboard />
           ) : (
             <Login onAuthSuccess={handleAuthSuccess} />
