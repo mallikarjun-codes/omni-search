@@ -445,5 +445,6 @@ module.exports = {
   saveUser,
   getDocuments,
   addDocument,
-  searchVectors
+  searchVectors,
+  getEmbedding
 };

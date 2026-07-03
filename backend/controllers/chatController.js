@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('../config/db');
+const { queryCompanyRAG } = require('../services/ragService');
 
 // Handle RAG Chat Query
 exports.query = async (req, res) => {
@@ -127,3 +128,5 @@ exports.getDocuments = async (req, res) => {
     res.status(500).json({ message: 'Error fetching documents.' });
   }
 };
+
+exports.queryCompanyRAG = queryCompanyRAG;
