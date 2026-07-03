@@ -1,0 +1,5 @@
+Acme Corp Travel Policy:
+Employees traveling on business must book their flights through the corporate portal. Standard economy is required for all flights under six hours.
+
+Acme Corp Pet Policy:
+Dogs are allowed in the office on Fridays, provided they are registered with HR and behave appropriately in the workplace.

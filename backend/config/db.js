@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
 // Database file paths
 const dataDir = path.join(__dirname, '..', 'data');
@@ -13,10 +13,108 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// Global In-memory Indexes
+// Global In-memory Indexes (legacy format support)
 let users = [];
 let documents = [];
 let vectorIndex = []; // Array of { id, docId, docTitle, text, embedding }
+
+// LocalVectorDB singleton class
+class LocalVectorDB {
+  constructor() {
+    if (LocalVectorDB.instance) {
+      return LocalVectorDB.instance;
+    }
+    this.vectors = []; // each record contains an ID, raw text chunk, and a numerical vector array
+    LocalVectorDB.instance = this;
+  }
+
+  // internal helper to compute Cosine Similarity
+  _cosineSimilarity(vecA, vecB) {
+    if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
+    let dotProduct = 0.0;
+    let normA = 0.0;
+    let normB = 0.0;
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  addRecord(id, text, vector) {
+    const index = this.vectors.findIndex(r => r.id === id);
+    if (index !== -1) {
+      this.vectors[index] = { id, text, vector };
+    } else {
+      this.vectors.push({ id, text, vector });
+    }
+  }
+
+  search(queryVector, limit = 3) {
+    if (this.vectors.length === 0) return [];
+    
+    const scored = this.vectors.map(record => {
+      const similarity = this._cosineSimilarity(queryVector, record.vector);
+      return {
+        id: record.id,
+        text: record.text,
+        similarity,
+        vector: record.vector
+      };
+    });
+
+    // Sort by similarity descending
+    scored.sort((a, b) => b.similarity - a.similarity);
+    return scored.slice(0, limit);
+  }
+
+  clear() {
+    this.vectors = [];
+  }
+}
+
+// Singleton database instance
+const localVectorDBInstance = new LocalVectorDB();
+
+// Embed content helper utilizing the new official @google/genai SDK
+async function getEmbedding(text, model = 'text-embedding-004') {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not defined in environment.");
+  }
+  const ai = new GoogleGenAI({ apiKey });
+  
+  try {
+    const response = await ai.models.embedContent({
+      model: model,
+      contents: text
+    });
+    if (response.embeddings && response.embeddings[0]) {
+      return response.embeddings[0].values;
+    } else if (response.embedding) {
+      return response.embedding.values;
+    }
+    throw new Error("Invalid embedding response format");
+  } catch (error) {
+    // If text-embedding-004 fails (e.g. 404 not found or not supported for this API key), fallback to gemini-embedding-001
+    if (model === 'text-embedding-004' && (error.status === 404 || error.message.includes('not found') || error.message.includes('404'))) {
+      console.warn(`[LocalVectorDB] text-embedding-004 not found or supported. Falling back to gemini-embedding-001.`);
+      const fallbackResponse = await ai.models.embedContent({
+        model: 'gemini-embedding-001',
+        contents: text
+      });
+      if (fallbackResponse.embeddings && fallbackResponse.embeddings[0]) {
+        return fallbackResponse.embeddings[0].values;
+      } else if (fallbackResponse.embedding) {
+        return fallbackResponse.embedding.values;
+      }
+      throw new Error("Invalid fallback embedding response format");
+    }
+    throw error;
+  }
+}
 
 // Initial seed documents
 const seedDocuments = [
@@ -107,19 +205,9 @@ For queries, reach out to finance@ourcompany.com or ask in the #finance Slack ch
   }
 ];
 
-// Helper: Cosine Similarity between two vectors
+// Helper: Cosine Similarity between two vectors (legacy/compatibility function)
 function cosineSimilarity(vecA, vecB) {
-  if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
-  let dotProduct = 0.0;
-  let normA = 0.0;
-  let normB = 0.0;
-  for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  return localVectorDBInstance._cosineSimilarity(vecA, vecB);
 }
 
 // Helper: Chunking long text semantically
@@ -133,7 +221,6 @@ function chunkText(text, maxChunkSize = 700, overlap = 100) {
     if (!para) continue;
 
     if (para.length > maxChunkSize) {
-      // If paragraph is huge, flush current chunk and split by sentences
       if (currentChunk) {
         chunks.push(currentChunk.trim());
         currentChunk = "";
@@ -206,6 +293,9 @@ async function initializeDB() {
       vectorsNeedRebuilt = true;
     }
 
+    // Always clear the in-memory vectors before rebuilding or loading
+    localVectorDBInstance.clear();
+
     if (vectorsNeedRebuilt) {
       console.log("Rebuilding vector embeddings index using Gemini...");
       vectorIndex = [];
@@ -214,9 +304,6 @@ async function initializeDB() {
       if (!apiKey) {
         console.warn("WARNING: GEMINI_API_KEY is not defined in backend environment. Vector index setup will be skipped/mocked.");
       } else {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const embedModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
-
         for (const doc of documents) {
           const chunks = chunkText(doc.content);
           console.log(`Chunked "${doc.title}" into ${chunks.length} segments.`);
@@ -224,15 +311,16 @@ async function initializeDB() {
           for (let i = 0; i < chunks.length; i++) {
             const chunkTextContent = chunks[i];
             try {
-              const result = await embedModel.embedContent(chunkTextContent);
-              const embedding = result.embedding.values;
-              vectorIndex.push({
+              const embedding = await getEmbedding(chunkTextContent, 'gemini-embedding-001');
+              const newRecord = {
                 id: `${doc.id}_chunk_${i}`,
                 docId: doc.id,
                 docTitle: doc.title,
                 text: chunkTextContent,
                 embedding
-              });
+              };
+              vectorIndex.push(newRecord);
+              localVectorDBInstance.addRecord(newRecord.id, newRecord.text, embedding);
             } catch (err) {
               console.error(`Failed to embed chunk ${i} of document "${doc.title}":`, err.message);
             }
@@ -244,6 +332,9 @@ async function initializeDB() {
       }
     } else {
       console.log(`Loaded ${vectorIndex.length} vector chunks from cache.`);
+      for (const item of vectorIndex) {
+        localVectorDBInstance.addRecord(item.id, item.text, item.embedding);
+      }
     }
 
     console.log(`Database loaded: ${users.length} users, ${documents.length} documents.`);
@@ -257,14 +348,17 @@ function getUsers() {
   return users;
 }
 
+// Retrieve user by email
 function getUserByEmail(email) {
   return users.find(u => u.email.toLowerCase() === email.toLowerCase());
 }
 
+// Retrieve user by id
 function getUserById(id) {
   return users.find(u => u.id === id);
 }
 
+// Save user
 function saveUser(user) {
   users.push(user);
   fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
@@ -297,15 +391,12 @@ async function addDocument(title, content, type) {
 
   // 2. Compute embeddings and add to vectors
   const chunks = chunkText(content);
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const embedModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
   const newChunks = [];
 
   for (let i = 0; i < chunks.length; i++) {
     const text = chunks[i];
     try {
-      const result = await embedModel.embedContent(text);
-      const embedding = result.embedding.values;
+      const embedding = await getEmbedding(text, 'gemini-embedding-001');
       const chunkObj = {
         id: `${docId}_chunk_${i}`,
         docId,
@@ -314,6 +405,7 @@ async function addDocument(title, content, type) {
         embedding
       };
       vectorIndex.push(chunkObj);
+      localVectorDBInstance.addRecord(chunkObj.id, chunkObj.text, embedding);
       newChunks.push(chunkObj);
     } catch (err) {
       console.error(`Failed to embed chunk ${i} for new doc "${title}":`, err.message);
@@ -330,26 +422,22 @@ async function addDocument(title, content, type) {
 }
 
 function searchVectors(queryEmbedding, limit = 3) {
-  if (vectorIndex.length === 0) return [];
+  const matches = localVectorDBInstance.search(queryEmbedding, limit);
   
-  const scored = vectorIndex.map(chunk => {
-    const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
+  return matches.map(match => {
+    const originalChunk = vectorIndex.find(c => c.id === match.id);
     return {
-      docId: chunk.docId,
-      docTitle: chunk.docTitle,
-      text: chunk.text,
-      similarity
+      docId: originalChunk ? originalChunk.docId : '',
+      docTitle: originalChunk ? originalChunk.docTitle : '',
+      text: match.text,
+      similarity: match.similarity
     };
   });
-
-  // Sort by similarity descending
-  scored.sort((a, b) => b.similarity - a.similarity);
-  
-  // Return top matches (filtered to make sure they are at least somewhat similar, e.g. similarity > 0.1)
-  return scored.slice(0, limit);
 }
 
 module.exports = {
+  LocalVectorDB,
+  localVectorDBInstance,
   initializeDB,
   getUsers,
   getUserByEmail,
