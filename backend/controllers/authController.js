@@ -17,7 +17,7 @@ exports.register = async (req, res) => {
 
   try {
     // Check if user exists
-    const existingUser = db.getUserByEmail(email);
+    const existingUser = await db.getUserByEmail(email);
     if (existingUser) {
       return res.status(400).json({ message: 'User with this email already exists.' });
     }
@@ -36,7 +36,7 @@ exports.register = async (req, res) => {
     };
 
     // Save user
-    db.saveUser(newUser);
+    await db.saveUser(newUser);
 
     // Create token
     const token = jwt.sign(
@@ -70,7 +70,7 @@ exports.login = async (req, res) => {
 
   try {
     // Check user exists
-    const user = db.getUserByEmail(email);
+    const user = await db.getUserByEmail(email);
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials. User does not exist.' });
     }

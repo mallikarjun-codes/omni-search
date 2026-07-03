@@ -1,21 +1,16 @@
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 const { GoogleGenAI } = require('@google/genai');
 
-// Database file paths
-const dataDir = path.join(__dirname, '..', 'data');
-const usersPath = path.join(dataDir, 'users.json');
-const docsPath = path.join(dataDir, 'documents.json');
-const vectorsPath = path.join(dataDir, 'vectors.json');
+// PostgreSQL client pool initialization
+const pool = new Pool({
+  host: process.env.PGHOST || 'localhost',
+  port: parseInt(process.env.PGPORT || '5432'),
+  user: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'postgres',
+  database: process.env.PGDATABASE || 'postgres',
+});
 
-// Ensure data directory exists
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Global In-memory Indexes (legacy format support)
-let users = [];
-let documents = [];
+// Global In-memory Indexes for sync vector search compatibility
 let vectorIndex = []; // Array of { id, docId, docTitle, text, embedding }
 
 // LocalVectorDB singleton class
@@ -78,7 +73,7 @@ class LocalVectorDB {
 // Singleton database instance
 const localVectorDBInstance = new LocalVectorDB();
 
-// Embed content helper utilizing the new official @google/genai SDK
+// Embed content helper utilizing @google/genai SDK
 async function getEmbedding(text, model = 'text-embedding-004') {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -98,7 +93,7 @@ async function getEmbedding(text, model = 'text-embedding-004') {
     }
     throw new Error("Invalid embedding response format");
   } catch (error) {
-    // If text-embedding-004 fails (e.g. 404 not found or not supported for this API key), fallback to gemini-embedding-001
+    // If text-embedding-004 fails, fallback to gemini-embedding-001
     if (model === 'text-embedding-004' && (error.status === 404 || error.message.includes('not found') || error.message.includes('404'))) {
       console.warn(`[LocalVectorDB] text-embedding-004 not found or supported. Falling back to gemini-embedding-001.`);
       const fallbackResponse = await ai.models.embedContent({
@@ -205,11 +200,6 @@ For queries, reach out to finance@ourcompany.com or ask in the #finance Slack ch
   }
 ];
 
-// Helper: Cosine Similarity between two vectors (legacy/compatibility function)
-function cosineSimilarity(vecA, vecB) {
-  return localVectorDBInstance._cosineSimilarity(vecA, vecB);
-}
-
 // Helper: Chunking long text semantically
 function chunkText(text, maxChunkSize = 700, overlap = 100) {
   const paragraphs = text.split(/\n+/);
@@ -255,170 +245,257 @@ function chunkText(text, maxChunkSize = 700, overlap = 100) {
   return chunks;
 }
 
-// Initialize Database (loads JSON files, creates seeds, handles embeddings)
+// Initialise Database (creates tables if not exist, seeds documents, loads vectors)
 async function initializeDB() {
   try {
-    // 1. Users
-    if (fs.existsSync(usersPath)) {
-      users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-    } else {
-      users = [];
-      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-    }
+    // 1. Create tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-    // 2. Documents
-    let docsNeedSeeding = false;
-    if (fs.existsSync(docsPath)) {
-      documents = JSON.parse(fs.readFileSync(docsPath, 'utf8'));
-      if (documents.length === 0) {
-        docsNeedSeeding = true;
-      }
-    } else {
-      docsNeedSeeding = true;
-    }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chats (
+        id VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id VARCHAR(255) PRIMARY KEY,
+        chat_id VARCHAR(255) REFERENCES chats(id) ON DELETE CASCADE,
+        sender VARCHAR(50) NOT NULL CHECK (sender IN ('user', 'bot')),
+        text TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+        file_name VARCHAR(255),
+        file_size INTEGER,
+        uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        title VARCHAR(255) NOT NULL,
+        type VARCHAR(100),
+        content TEXT
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS vectors (
+        id VARCHAR(255) PRIMARY KEY,
+        doc_id VARCHAR(255) REFERENCES documents(id) ON DELETE CASCADE,
+        doc_title VARCHAR(255),
+        text TEXT NOT NULL,
+        embedding JSONB NOT NULL
+      );
+    `);
+
+    console.log("[Database] All PostgreSQL tables verified/created.");
+
+    // Check documents table
+    const docsRes = await pool.query('SELECT COUNT(*)::int as count FROM documents');
+    const docsNeedSeeding = docsRes.rows[0].count === 0;
 
     if (docsNeedSeeding) {
-      documents = seedDocuments;
-      fs.writeFileSync(docsPath, JSON.stringify(documents, null, 2));
-    }
-
-    // 3. Vectors
-    let vectorsNeedRebuilt = false;
-    if (fs.existsSync(vectorsPath)) {
-      vectorIndex = JSON.parse(fs.readFileSync(vectorsPath, 'utf8'));
-      if (vectorIndex.length === 0 && documents.length > 0) {
-        vectorsNeedRebuilt = true;
+      console.log("[Database] Seeding initial documents...");
+      for (const doc of seedDocuments) {
+        await pool.query(
+          'INSERT INTO documents (id, user_id, file_name, file_size, uploaded_at, title, type, content) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+          [doc.id, null, `${doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.txt`, Buffer.byteLength(doc.content, 'utf8'), doc.date, doc.title, doc.type, doc.content]
+        );
       }
-    } else {
-      vectorsNeedRebuilt = true;
     }
 
-    // Always clear the in-memory vectors before rebuilding or loading
+    // Check vectors table
+    const vectorsRes = await pool.query('SELECT COUNT(*)::int as count FROM vectors');
+    const vectorsNeedRebuilt = vectorsRes.rows[0].count === 0;
+
     localVectorDBInstance.clear();
+    vectorIndex = [];
 
     if (vectorsNeedRebuilt) {
-      console.log("Rebuilding vector embeddings index using Gemini...");
-      vectorIndex = [];
-      
+      console.log("[Database] Rebuilding vector embeddings using Gemini...");
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        console.warn("WARNING: GEMINI_API_KEY is not defined in backend environment. Vector index setup will be skipped/mocked.");
+        console.warn("WARNING: GEMINI_API_KEY is not defined. Skipping embedding rebuild.");
       } else {
-        for (const doc of documents) {
+        const allDocs = await pool.query('SELECT * FROM documents');
+        for (const doc of allDocs.rows) {
           const chunks = chunkText(doc.content);
-          console.log(`Chunked "${doc.title}" into ${chunks.length} segments.`);
-          
+          console.log(`Chunking and embedding document "${doc.title}" (${chunks.length} chunks)...`);
           for (let i = 0; i < chunks.length; i++) {
             const chunkTextContent = chunks[i];
             try {
               const embedding = await getEmbedding(chunkTextContent, 'gemini-embedding-001');
-              const newRecord = {
-                id: `${doc.id}_chunk_${i}`,
+              const chunkId = `${doc.id}_chunk_${i}`;
+              
+              await pool.query(
+                'INSERT INTO vectors (id, doc_id, doc_title, text, embedding) VALUES ($1, $2, $3, $4, $5)',
+                [chunkId, doc.id, doc.title, chunkTextContent, JSON.stringify(embedding)]
+              );
+              
+              localVectorDBInstance.addRecord(chunkId, chunkTextContent, embedding);
+              vectorIndex.push({
+                id: chunkId,
                 docId: doc.id,
                 docTitle: doc.title,
                 text: chunkTextContent,
-                embedding
-              };
-              vectorIndex.push(newRecord);
-              localVectorDBInstance.addRecord(newRecord.id, newRecord.text, embedding);
+                embedding: embedding
+              });
             } catch (err) {
-              console.error(`Failed to embed chunk ${i} of document "${doc.title}":`, err.message);
+              console.error(`Failed to embed chunk ${i} of doc "${doc.title}":`, err.message);
             }
           }
         }
-        
-        fs.writeFileSync(vectorsPath, JSON.stringify(vectorIndex, null, 2));
-        console.log(`Successfully built and saved ${vectorIndex.length} vector chunks.`);
+        console.log(`[Database] Embeddings generation completed.`);
       }
     } else {
-      console.log(`Loaded ${vectorIndex.length} vector chunks from cache.`);
-      for (const item of vectorIndex) {
-        localVectorDBInstance.addRecord(item.id, item.text, item.embedding);
+      const allVectors = await pool.query('SELECT * FROM vectors');
+      console.log(`[Database] Loading ${allVectors.rows.length} vector chunks from DB...`);
+      for (const item of allVectors.rows) {
+        const embeddingArray = typeof item.embedding === 'string' ? JSON.parse(item.embedding) : item.embedding;
+        localVectorDBInstance.addRecord(item.id, item.text, embeddingArray);
+        vectorIndex.push({
+          id: item.id,
+          docId: item.doc_id,
+          docTitle: item.doc_title,
+          text: item.text,
+          embedding: embeddingArray
+        });
       }
     }
 
-    console.log(`Database loaded: ${users.length} users, ${documents.length} documents.`);
+    const usersCount = await pool.query('SELECT COUNT(*)::int as count FROM users');
+    const docsCount = await pool.query('SELECT COUNT(*)::int as count FROM documents');
+    console.log(`Database loaded successfully: ${usersCount.rows[0].count} users, ${docsCount.rows[0].count} documents.`);
   } catch (error) {
     console.error("Error initializing Database:", error);
+    throw error;
   }
 }
 
+// User mapping helper
+function mapUserRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    password: row.password_hash,
+    createdAt: row.created_at
+  };
+}
+
+// Document mapping helper
+function mapDocumentRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    file_name: row.file_name,
+    file_size: row.file_size,
+    title: row.title,
+    type: row.type,
+    content: row.content,
+    date: row.uploaded_at
+  };
+}
+
 // User methods
-function getUsers() {
-  return users;
+async function getUsers() {
+  const res = await pool.query('SELECT * FROM users');
+  return res.rows.map(mapUserRow);
 }
 
 // Retrieve user by email
-function getUserByEmail(email) {
-  return users.find(u => u.email.toLowerCase() === email.toLowerCase());
+async function getUserByEmail(email) {
+  const res = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+  return mapUserRow(res.rows[0]);
 }
 
 // Retrieve user by id
-function getUserById(id) {
-  return users.find(u => u.id === id);
+async function getUserById(id) {
+  const res = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+  return mapUserRow(res.rows[0]);
 }
 
 // Save user
-function saveUser(user) {
-  users.push(user);
-  fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+async function saveUser(user) {
+  await pool.query(
+    'INSERT INTO users (id, name, email, password_hash, created_at) VALUES ($1, $2, $3, $4, $5)',
+    [user.id, user.name || null, user.email, user.password, user.createdAt || new Date()]
+  );
   return user;
 }
 
 // Document & Vector methods
-function getDocuments() {
-  return documents;
+async function getDocuments() {
+  const res = await pool.query('SELECT * FROM documents ORDER BY uploaded_at DESC');
+  return res.rows.map(mapDocumentRow);
 }
 
-async function addDocument(title, content, type) {
+async function addDocument(title, content, type, userId = null, customFileName = null, customFileSize = null) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set in environment.");
   }
 
   const docId = "doc_" + Date.now();
-  const newDoc = {
-    id: docId,
-    title,
-    type: type || "General Document",
-    content,
-    date: new Date().toISOString()
-  };
+  const fileName = customFileName || `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.txt`;
+  const fileSize = customFileSize || Buffer.byteLength(content, 'utf8');
 
-  // 1. Add to documents list
-  documents.push(newDoc);
-  fs.writeFileSync(docsPath, JSON.stringify(documents, null, 2));
+  // 1. Add to documents table
+  await pool.query(
+    'INSERT INTO documents (id, user_id, file_name, file_size, uploaded_at, title, type, content) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+    [docId, userId, fileName, fileSize, new Date().toISOString(), title, type || "General Document", content]
+  );
 
-  // 2. Compute embeddings and add to vectors
+  // 2. Compute embeddings and add to vectors table
   const chunks = chunkText(content);
-  const newChunks = [];
-
   for (let i = 0; i < chunks.length; i++) {
     const text = chunks[i];
     try {
       const embedding = await getEmbedding(text, 'gemini-embedding-001');
-      const chunkObj = {
-        id: `${docId}_chunk_${i}`,
-        docId,
+      const chunkId = `${docId}_chunk_${i}`;
+      
+      await pool.query(
+        'INSERT INTO vectors (id, doc_id, doc_title, text, embedding) VALUES ($1, $2, $3, $4, $5)',
+        [chunkId, docId, title, text, JSON.stringify(embedding)]
+      );
+      
+      localVectorDBInstance.addRecord(chunkId, text, embedding);
+      vectorIndex.push({
+        id: chunkId,
+        docId: docId,
         docTitle: title,
-        text,
-        embedding
-      };
-      vectorIndex.push(chunkObj);
-      localVectorDBInstance.addRecord(chunkObj.id, chunkObj.text, embedding);
-      newChunks.push(chunkObj);
+        text: text,
+        embedding: embedding
+      });
     } catch (err) {
       console.error(`Failed to embed chunk ${i} for new doc "${title}":`, err.message);
-      // Remove doc from documents array since indexing failed
-      documents = documents.filter(d => d.id !== docId);
-      fs.writeFileSync(docsPath, JSON.stringify(documents, null, 2));
+      // Clean up document on failure
+      await pool.query('DELETE FROM documents WHERE id = $1', [docId]);
       throw new Error(`Embedding generation failed: ${err.message}`);
     }
   }
 
-  // Update vectors on disk
-  fs.writeFileSync(vectorsPath, JSON.stringify(vectorIndex, null, 2));
-  return newDoc;
+  return {
+    id: docId,
+    title,
+    type: type || "General Document",
+    date: new Date().toISOString()
+  };
 }
 
 function searchVectors(queryEmbedding, limit = 3) {
@@ -436,6 +513,7 @@ function searchVectors(queryEmbedding, limit = 3) {
 }
 
 module.exports = {
+  pool,
   LocalVectorDB,
   localVectorDBInstance,
   initializeDB,

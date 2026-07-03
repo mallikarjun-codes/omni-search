@@ -6,6 +6,7 @@ const db = require('./config/db');
 
 const authRoutes = require('./routes/authRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const documentRoutes = require('./routes/documentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -43,6 +44,7 @@ app.get('/health', (req, res) => {
 // Wire routes
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/documents', documentRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

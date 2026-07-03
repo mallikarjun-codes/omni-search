@@ -51,7 +51,7 @@ exports.uploadDocument = async (req, res) => {
 // Handle Fetching All Document Metadata
 exports.getDocuments = async (req, res) => {
   try {
-    const docs = db.getDocuments();
+    const docs = await db.getDocuments();
     // Return document metadata without the massive contents for listings
     const metadataList = docs.map(doc => ({
       id: doc.id,
