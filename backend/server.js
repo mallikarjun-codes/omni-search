@@ -11,26 +11,15 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Hard CORS Configuration
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
-];
-
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
+  origin: 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  credentials: true
 }));
+
+// Global pre-flight catch-all handler right below CORS configuration
+app.options('*', cors());
 
 // Request body parsers
 app.use(express.json());
@@ -69,13 +58,21 @@ async function startServer() {
   console.log("Starting server services...");
   await db.initializeDB();
   
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`===============================================`);
     console.log(`🚀 Server is running on port: ${PORT}`);
     console.log(`👉 Health check: http://localhost:${PORT}/health`);
     console.log(`👉 Auth API: http://localhost:${PORT}/api/auth`);
     console.log(`👉 Chat API: http://localhost:${PORT}/api/chat`);
     console.log(`===============================================`);
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.warn(`[Advisory] Port ${PORT} is already occupied. Please check if another process is running on this port.`);
+    } else {
+      console.error('Server execution error:', error);
+    }
   });
 }
 
