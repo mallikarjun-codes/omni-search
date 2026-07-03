@@ -37,7 +37,7 @@ async function runTest() {
     console.log(`✅ Received embedding vector (length: ${queryEmbedding.length})`);
 
     console.log("Running similarity lookup...");
-    const matches = db.searchVectors(queryEmbedding, 2);
+    const matches = await db.searchVectors(queryEmbedding, 2);
     
     console.log(`✅ Found ${matches.length} matches:`);
     matches.forEach((match, i) => {

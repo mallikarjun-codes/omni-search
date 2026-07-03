@@ -11,7 +11,7 @@ exports.query = async (req, res) => {
   }
 
   try {
-    const answer = await queryCompanyRAG(query);
+    const answer = await queryCompanyRAG(query, req.user ? req.user.id : null);
     res.json({
       answer: answer
     });

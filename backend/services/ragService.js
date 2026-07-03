@@ -1,23 +1,62 @@
 const { GoogleGenAI } = require('@google/genai');
-const { localVectorDBInstance, getEmbedding } = require('../config/db');
+const { pinecone, pineconeIndexName, getEmbedding } = require('../config/db');
 
 /**
  * Service function to connect context lookup with Gemini text generation.
  * 
  * @param {string} userQuery The raw query from the user.
+ * @param {string} currentUserId The authenticated ID of the user query.
  * @returns {Promise<string>} The generated response text.
  */
-async function queryCompanyRAG(userQuery) {
+async function queryCompanyRAG(userQuery, currentUserId = null) {
   // 1. Generate query embedding using the existing getEmbedding utility
   const queryVector = await getEmbedding(userQuery);
 
-  // 2. Retrieve top 3 matching text chunks from the LocalVectorDB singleton instance
-  const matches = localVectorDBInstance.search(queryVector, 3);
+  let matches = [];
 
-  // 3. Extract text from retrieved chunks and separate by newlines
+  // 2. Query Pinecone with user context isolation
+  if (process.env.PINECONE_API_KEY) {
+    try {
+      const index = pinecone.index(pineconeIndexName);
+      
+      // Construct metadata filter to isolate User A's uploads from User B's,
+      // while allowing all users to see public/system seed documentation.
+      const filter = currentUserId
+        ? { user_id: { $in: [currentUserId, 'system'] } }
+        : { user_id: { $eq: 'system' } };
+
+      const queryResponse = await index.query({
+        vector: queryVector,
+        topK: 3,
+        includeMetadata: true,
+        filter: filter
+      });
+
+      matches = queryResponse.matches.map(match => ({
+        text: match.metadata ? match.metadata.text : '',
+        similarity: match.score || 0
+      }));
+      console.log(`[ragService] Retrieved ${matches.length} matches from Pinecone (filter: ${JSON.stringify(filter)}).`);
+    } catch (err) {
+      console.error("[ragService] Pinecone query failed, falling back to local database search:", err);
+    }
+  }
+
+  // 3. Fallback to LocalVectorDB if Pinecone is not set up or query returned empty results
+  if (matches.length === 0) {
+    const { localVectorDBInstance } = require('../config/db');
+    const localMatches = localVectorDBInstance.search(queryVector, 3);
+    matches = localMatches.map(match => ({
+      text: match.text,
+      similarity: match.similarity
+    }));
+    console.log(`[ragService] Fallback: Retrieved ${matches.length} matches from local vector database.`);
+  }
+
+  // 4. Extract text from retrieved chunks and separate by newlines
   const context = matches.map(match => match.text).join('\n');
 
-  // 4. Construct the strict prompt payload
+  // 5. Construct the strict prompt payload
   const prompt = `You are an authorized, secure corporate AI assistant. Answer the user's question safely, professionally, and accurately using ONLY the facts provided in the Context section below. 
 
 Context:
@@ -27,7 +66,7 @@ User Question: ${userQuery}
 
 Constraint: If the answer cannot be confidently derived from the provided context, you must strictly reply with: 'I am sorry, but I do not have access to that information in the official company documents.'`;
 
-  // 5. Initialize the modern GoogleGenAI client and request generation
+  // 6. Initialize the modern GoogleGenAI client and request generation
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not defined in environment.');

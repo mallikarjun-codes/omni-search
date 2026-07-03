@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const { GoogleGenAI } = require('@google/genai');
+const { Pinecone } = require('@pinecone-database/pinecone');
 
 // PostgreSQL client pool initialization
 const pool = new Pool({
@@ -10,7 +11,13 @@ const pool = new Pool({
   database: process.env.PGDATABASE || 'postgres',
 });
 
-// Global In-memory Indexes for sync vector search compatibility
+// Initialize Pinecone Client
+const pinecone = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY || '',
+});
+const pineconeIndexName = 'omni-search';
+
+// Global In-memory Indexes for sync vector search compatibility / fallback
 let vectorIndex = []; // Array of { id, docId, docTitle, text, embedding }
 
 // LocalVectorDB singleton class
@@ -245,10 +252,10 @@ function chunkText(text, maxChunkSize = 700, overlap = 100) {
   return chunks;
 }
 
-// Initialise Database (creates tables if not exist, seeds documents, loads vectors)
+// Initialise Database (creates tables, Pinecone index, seeds documents, loads vectors)
 async function initializeDB() {
   try {
-    // 1. Create tables
+    // 1. Create SQL tables
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(255) PRIMARY KEY,
@@ -303,6 +310,34 @@ async function initializeDB() {
 
     console.log("[Database] All PostgreSQL tables verified/created.");
 
+    // 2. Setup Pinecone Index
+    if (process.env.PINECONE_API_KEY) {
+      console.log("[Database] Checking Pinecone index initialization...");
+      const indexesRes = await pinecone.listIndexes();
+      const indexExists = indexesRes.indexes.some(idx => idx.name === pineconeIndexName);
+      if (!indexExists) {
+        console.log(`[Database] Index "${pineconeIndexName}" not found. Creating serverless Pinecone index...`);
+        await pinecone.createIndex({
+          name: pineconeIndexName,
+          dimension: 3072,
+          metric: 'cosine',
+          spec: {
+            serverless: {
+              cloud: 'aws',
+              region: 'us-east-1'
+            }
+          }
+        });
+        console.log(`[Database] Index "${pineconeIndexName}" created successfully.`);
+        // Sleep a bit for index to provision
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      } else {
+        console.log(`[Database] Pinecone index "${pineconeIndexName}" exists and is ready.`);
+      }
+    } else {
+      console.warn("WARNING: PINECONE_API_KEY is not defined in environment.");
+    }
+
     // Check documents table
     const docsRes = await pool.query('SELECT COUNT(*)::int as count FROM documents');
     const docsNeedSeeding = docsRes.rows[0].count === 0;
@@ -310,30 +345,78 @@ async function initializeDB() {
     if (docsNeedSeeding) {
       console.log("[Database] Seeding initial documents...");
       for (const doc of seedDocuments) {
+        const docId = doc.id;
+        const fileName = `${doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.txt`;
+        const fileSize = Buffer.byteLength(doc.content, 'utf8');
+
         await pool.query(
           'INSERT INTO documents (id, user_id, file_name, file_size, uploaded_at, title, type, content) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-          [doc.id, null, `${doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.txt`, Buffer.byteLength(doc.content, 'utf8'), doc.date, doc.title, doc.type, doc.content]
+          [docId, null, fileName, fileSize, doc.date, doc.title, doc.type, doc.content]
         );
+
+        // Chunk and upload to Pinecone
+        const chunks = chunkText(doc.content);
+        const recordsToUpsert = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkTextContent = chunks[i];
+          try {
+            const embedding = await getEmbedding(chunkTextContent, 'gemini-embedding-001');
+            const chunkId = `${docId}_chunk_${i}`;
+
+            // Save chunk vector to PostgreSQL vectors table (backup)
+            await pool.query(
+              'INSERT INTO vectors (id, doc_id, doc_title, text, embedding) VALUES ($1, $2, $3, $4, $5)',
+              [chunkId, docId, doc.title, chunkTextContent, JSON.stringify(embedding)]
+            );
+
+            recordsToUpsert.push({
+              id: chunkId,
+              values: embedding,
+              metadata: {
+                user_id: 'system',
+                document_id: docId,
+                doc_title: doc.title,
+                text: chunkTextContent
+              }
+            });
+
+            // LocalVectorDB sync fallback
+            localVectorDBInstance.addRecord(chunkId, chunkTextContent, embedding);
+            vectorIndex.push({
+              id: chunkId,
+              docId: docId,
+              docTitle: doc.title,
+              text: chunkTextContent,
+              embedding: embedding
+            });
+          } catch (err) {
+            console.error(`Failed to embed/index chunk ${i} of doc "${doc.title}":`, err.message);
+          }
+        }
+
+        if (recordsToUpsert.length > 0 && process.env.PINECONE_API_KEY) {
+          const index = pinecone.index(pineconeIndexName);
+          await index.upsert({ records: recordsToUpsert });
+          console.log(`[Database] Seed vectors for "${doc.title}" upserted to Pinecone.`);
+        }
       }
     }
 
-    // Check vectors table
+    // Check vectors table and restore local arrays from DB
     const vectorsRes = await pool.query('SELECT COUNT(*)::int as count FROM vectors');
     const vectorsNeedRebuilt = vectorsRes.rows[0].count === 0;
 
     localVectorDBInstance.clear();
     vectorIndex = [];
 
-    if (vectorsNeedRebuilt) {
+    if (!docsNeedSeeding && vectorsNeedRebuilt) {
       console.log("[Database] Rebuilding vector embeddings using Gemini...");
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn("WARNING: GEMINI_API_KEY is not defined. Skipping embedding rebuild.");
-      } else {
+      if (apiKey) {
         const allDocs = await pool.query('SELECT * FROM documents');
         for (const doc of allDocs.rows) {
           const chunks = chunkText(doc.content);
-          console.log(`Chunking and embedding document "${doc.title}" (${chunks.length} chunks)...`);
+          const recordsToUpsert = [];
           for (let i = 0; i < chunks.length; i++) {
             const chunkTextContent = chunks[i];
             try {
@@ -353,12 +436,26 @@ async function initializeDB() {
                 text: chunkTextContent,
                 embedding: embedding
               });
+
+              recordsToUpsert.push({
+                id: chunkId,
+                values: embedding,
+                metadata: {
+                  user_id: doc.user_id || 'system',
+                  document_id: doc.id,
+                  doc_title: doc.title,
+                  text: chunkTextContent
+                }
+              });
             } catch (err) {
               console.error(`Failed to embed chunk ${i} of doc "${doc.title}":`, err.message);
             }
           }
+          if (recordsToUpsert.length > 0 && process.env.PINECONE_API_KEY) {
+            const index = pinecone.index(pineconeIndexName);
+            await index.upsert({ records: recordsToUpsert });
+          }
         }
-        console.log(`[Database] Embeddings generation completed.`);
       }
     } else {
       const allVectors = await pool.query('SELECT * FROM vectors');
@@ -463,6 +560,7 @@ async function addDocument(title, content, type, userId = null, customFileName =
 
   // 2. Compute embeddings and add to vectors table
   const chunks = chunkText(content);
+  const recordsToUpsert = [];
   for (let i = 0; i < chunks.length; i++) {
     const text = chunks[i];
     try {
@@ -482,12 +580,29 @@ async function addDocument(title, content, type, userId = null, customFileName =
         text: text,
         embedding: embedding
       });
+
+      recordsToUpsert.push({
+        id: chunkId,
+        values: embedding,
+        metadata: {
+          user_id: userId || 'system',
+          document_id: docId,
+          doc_title: title,
+          text: text
+        }
+      });
     } catch (err) {
       console.error(`Failed to embed chunk ${i} for new doc "${title}":`, err.message);
       // Clean up document on failure
       await pool.query('DELETE FROM documents WHERE id = $1', [docId]);
       throw new Error(`Embedding generation failed: ${err.message}`);
     }
+  }
+
+  // Upsert to Pinecone if configured
+  if (recordsToUpsert.length > 0 && process.env.PINECONE_API_KEY) {
+    const index = pinecone.index(pineconeIndexName);
+    await index.upsert({ records: recordsToUpsert });
   }
 
   return {
@@ -498,9 +613,37 @@ async function addDocument(title, content, type, userId = null, customFileName =
   };
 }
 
-function searchVectors(queryEmbedding, limit = 3) {
+// Updated searchVectors to be async and fetch from Pinecone index with user-specific fallback filtering
+async function searchVectors(queryEmbedding, limit = 3, userId = null) {
+  if (process.env.PINECONE_API_KEY) {
+    try {
+      const index = pinecone.index(pineconeIndexName);
+      
+      // Multi-tenant user filtering
+      const filter = userId ? { user_id: { $in: [userId, 'system'] } } : { user_id: { $eq: 'system' } };
+
+      const queryResponse = await index.query({
+        vector: queryEmbedding,
+        topK: limit,
+        includeMetadata: true,
+        filter: filter
+      });
+
+      return queryResponse.matches.map(match => {
+        return {
+          docId: match.metadata ? match.metadata.document_id : '',
+          docTitle: match.metadata ? match.metadata.doc_title : '',
+          text: match.metadata ? match.metadata.text : '',
+          similarity: match.score || 0
+        };
+      });
+    } catch (error) {
+      console.error("[Database] Pinecone search error, falling back to local search:", error);
+    }
+  }
+
+  // Fallback to local sync search
   const matches = localVectorDBInstance.search(queryEmbedding, limit);
-  
   return matches.map(match => {
     const originalChunk = vectorIndex.find(c => c.id === match.id);
     return {
@@ -514,6 +657,8 @@ function searchVectors(queryEmbedding, limit = 3) {
 
 module.exports = {
   pool,
+  pinecone,
+  pineconeIndexName,
   LocalVectorDB,
   localVectorDBInstance,
   initializeDB,
