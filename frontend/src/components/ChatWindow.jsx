@@ -117,10 +117,10 @@ export default function ChatWindow({ chatId, onChatCreated }) {
   ];
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/40 rounded-2xl border border-white/5 overflow-hidden backdrop-blur-md">
+    <div className="flex flex-col h-full bg-slate-900/40 dark:bg-[#2d2d2d] rounded-2xl border border-white/5 dark:border-[#404040] overflow-hidden backdrop-blur-md">
       
       {/* Header */}
-      <div className="px-6 py-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
+      <div className="px-6 py-4 bg-white/5 dark:bg-[#363636] border-b border-white/5 dark:border-[#404040] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-brand-400" />
           <span className="text-sm font-semibold text-slate-200">
@@ -254,7 +254,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
       </div>
 
       {/* Input Tray */}
-      <form onSubmit={handleSubmit} className="p-4 bg-white/5 border-t border-white/5">
+      <form onSubmit={handleSubmit} className="p-4 bg-white/5 dark:bg-[#363636] border-t border-white/5 dark:border-[#404040]">
         <div className="relative flex items-center">
           <input
             type="text"

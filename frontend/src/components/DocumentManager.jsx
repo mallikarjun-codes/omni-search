@@ -213,7 +213,7 @@ export default function DocumentManager({ user }) {
   );
 
   return (
-    <div className="h-full flex flex-col bg-slate-900/40 border border-white/5 rounded-2xl p-6 overflow-hidden backdrop-blur-md">
+    <div className="h-full flex flex-col bg-slate-900/40 dark:bg-[#2d2d2d] border border-white/5 dark:border-[#404040] rounded-2xl p-6 overflow-hidden backdrop-blur-md">
       
       {/* Header Info */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 flex-shrink-0">
@@ -228,7 +228,7 @@ export default function DocumentManager({ user }) {
         </div>
 
         {/* Quick Database Status Stats */}
-        <div className="flex items-center gap-3 bg-white/5 border border-white/5 px-4 py-2 rounded-xl text-xs">
+        <div className="flex items-center gap-3 bg-white/5 dark:bg-[#363636] border border-white/5 dark:border-[#404040] px-4 py-2 rounded-xl text-xs">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="text-slate-300 font-mono">Pinecone Status: Online</span>
         </div>
@@ -312,17 +312,17 @@ export default function DocumentManager({ user }) {
 
       {/* Grid Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6 flex-shrink-0">
-        <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+        <div className="p-4 rounded-xl bg-white/5 dark:bg-[#363636] border border-white/5 dark:border-[#404040]">
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Total Documents</span>
           <span className="text-lg font-bold text-brand-300 block mt-0.5">{documents.length} Files</span>
         </div>
-        <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+        <div className="p-4 rounded-xl bg-white/5 dark:bg-[#363636] border border-white/5 dark:border-[#404040]">
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Personal Uploads</span>
           <span className="text-lg font-bold text-violet-300 block mt-0.5">
             {documents.filter(d => d.userId === user?.id).length} Files
           </span>
         </div>
-        <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+        <div className="p-4 rounded-xl bg-white/5 dark:bg-[#363636] border border-white/5 dark:border-[#404040]">
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Total Embedded Chunks</span>
           <span className="text-sm font-semibold text-slate-200 block mt-1.5">Auto-computed on ingest</span>
         </div>
@@ -340,7 +340,7 @@ export default function DocumentManager({ user }) {
       </div>
 
       {/* Documents Data Table */}
-      <div className="flex-1 overflow-auto border border-white/5 rounded-2xl bg-slate-950/20">
+      <div className="flex-1 overflow-auto border border-white/5 dark:border-[#404040] rounded-2xl bg-slate-950/20 dark:bg-[#252525]/50">
         {loading && documents.length === 0 ? (
           <div className="h-full flex items-center justify-center p-8">
             <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
@@ -356,7 +356,7 @@ export default function DocumentManager({ user }) {
         ) : (
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b border-white/5 bg-white/5 text-[10px] font-mono tracking-wider text-slate-400 uppercase select-none">
+              <tr className="border-b border-white/5 dark:border-[#404040] bg-white/5 dark:bg-[#363636] text-[10px] font-mono tracking-wider text-slate-400 uppercase select-none">
                 <th className="px-6 py-3.5 font-semibold">Document Title</th>
                 <th className="px-6 py-3.5 font-semibold">File Size</th>
                 <th className="px-6 py-3.5 font-semibold">Upload Date</th>

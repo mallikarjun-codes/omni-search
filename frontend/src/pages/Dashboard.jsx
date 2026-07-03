@@ -16,10 +16,12 @@ import {
   Trash2, 
   User,
   Activity,
-  Menu
+  Menu,
+  Sun,
+  Moon
 } from 'lucide-react';
 
-export default function Dashboard({ user, onLogout }) {
+export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
   const [activeView, setActiveView] = useState('chat');
   const [chatId, setChatId] = useState(null);
   const [chats, setChats] = useState([]);
@@ -185,10 +187,10 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-slate-950 text-slate-100 font-sans">
+    <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-slate-950 dark:bg-[#252525] light:bg-slate-50 text-slate-100 dark:text-slate-200 font-sans transition-colors duration-300">
       
       {/* MOBILE HEADER BAR */}
-      <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-white/5 flex-shrink-0">
+      <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-slate-900 dark:bg-[#2d2d2d] border-b border-white/5 dark:border-[#404040] flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-gradient-to-tr from-brand-600 to-violet-500 p-1.5 rounded-lg flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" />
@@ -205,11 +207,11 @@ export default function Dashboard({ user, onLogout }) {
 
       {/* LEFT SIDEBAR (Desktop permanent, Mobile slideover/overlay) */}
       <div className={`
-        fixed inset-y-0 left-0 z-40 lg:relative lg:z-0 lg:flex w-80 flex-col bg-slate-900/50 border-r border-white/5 h-full transition-transform duration-300 ease-in-out flex-shrink-0 backdrop-blur-md
+        fixed inset-y-0 left-0 z-40 lg:relative lg:z-0 lg:flex w-80 flex-col bg-slate-900/50 dark:bg-[#2d2d2d] border-r border-white/5 dark:border-[#404040] h-full transition-transform duration-300 ease-in-out flex-shrink-0 backdrop-blur-md
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Branding Area */}
-        <div className="p-6 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+        <div className="p-6 border-b border-white/5 dark:border-[#404040] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-tr from-brand-600 to-violet-500 p-2 rounded-xl shadow-lg flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
@@ -221,13 +223,28 @@ export default function Dashboard({ user, onLogout }) {
               <p className="text-[9px] text-slate-400 font-mono tracking-widest uppercase">Workspace Portal</p>
             </div>
           </div>
-          {/* Close sidebar button on mobile */}
-          <button 
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1 rounded hover:bg-white/5 text-slate-400 hover:text-white cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {/* Theme toggle + close sidebar */}
+          <div className="flex items-center gap-2">
+            {/* Sun/Moon Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              className="p-2 rounded-lg bg-[#363636] hover:bg-[#404040] border border-[#404040] text-slate-300 hover:text-white transition-all duration-200 cursor-pointer flex items-center justify-center"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-brand-400" />
+              )}
+            </button>
+            {/* Close sidebar button on mobile */}
+            <button 
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-1 rounded hover:bg-white/5 dark:hover:bg-[#363636] text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* New Chat Button */}
@@ -285,7 +302,7 @@ export default function Dashboard({ user, onLogout }) {
         </div>
 
         {/* Lower Navigation Section */}
-        <div className="p-4 border-t border-white/5 bg-slate-950/20 space-y-1.5 flex-shrink-0">
+        <div className="p-4 border-t border-white/5 dark:border-[#404040] bg-slate-950/20 dark:bg-[#252525]/50 space-y-1.5 flex-shrink-0">
           <button
             onClick={() => {
               setActiveView('chat');
