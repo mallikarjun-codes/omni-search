@@ -23,7 +23,8 @@ exports.upload = async (req, res) => {
     // Extract fields
     const title = req.body.title || originalName.replace(/\.[^/.]+$/, "");
     const type = req.body.type || 'General Document';
-    const userId = req.user ? req.user.id : null;
+    const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+    const userId = rawUserId ? String(rawUserId) : null;
 
     // Index the document (db.addDocument chunks, embeds, and saves to PostgreSQL)
     const newDoc = await db.addDocument(title, textContent, type, userId, originalName, fileSize);
@@ -47,7 +48,8 @@ exports.upload = async (req, res) => {
 
 exports.list = async (req, res) => {
   try {
-    const userId = req.user ? req.user.id : null;
+    const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+    const userId = rawUserId ? String(rawUserId) : null;
     const docs = await db.getDocuments(userId);
     
     // Return document metadata without the massive contents for listings
@@ -70,7 +72,8 @@ exports.list = async (req, res) => {
 
 exports.delete = async (req, res) => {
   const { id } = req.params;
-  const userId = req.user ? req.user.id : null;
+  const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+  const userId = rawUserId ? String(rawUserId) : null;
 
   try {
     // 1. Fetch document to verify ownership

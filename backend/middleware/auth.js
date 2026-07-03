@@ -19,6 +19,11 @@ module.exports = function (req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_company_rag_jwt_key_2026');
     req.user = decoded;
+    if (req.user) {
+      const rawId = decoded.id || decoded.userId;
+      req.user.id = rawId ? String(rawId) : undefined;
+      req.user.userId = rawId ? String(rawId) : undefined;
+    }
     next();
   } catch (err) {
     res.status(401).json({ message: 'Token is not valid or has expired.' });

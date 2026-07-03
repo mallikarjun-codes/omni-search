@@ -4,7 +4,8 @@ const db = require('../config/db');
 // Creates a new chat session thread for the logged-in user; defaults title to 'New Chat'.
 exports.createChat = async (req, res) => {
   const { title } = req.body;
-  const userId = req.user.id;
+  const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+  const userId = rawUserId ? String(rawUserId) : null;
   const chatId = 'chat_' + Date.now();
   const chatTitle = title || 'New Chat';
 
@@ -29,7 +30,8 @@ exports.createChat = async (req, res) => {
 // GET /api/chats
 // Fetches all active chat sessions belonging only to the logged-in user, ordered by created_at DESC.
 exports.getChats = async (req, res) => {
-  const userId = req.user.id;
+  const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+  const userId = rawUserId ? String(rawUserId) : null;
 
   try {
     const result = await db.pool.query(
@@ -48,7 +50,8 @@ exports.getChats = async (req, res) => {
 // Retrieves the complete historical array log of messages inside a specific session thread.
 exports.getChatMessages = async (req, res) => {
   const { chatId } = req.params;
-  const userId = req.user.id;
+  const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+  const userId = rawUserId ? String(rawUserId) : null;
 
   try {
     // Check if the chat exists and belongs to the user
@@ -77,7 +80,8 @@ exports.getChatMessages = async (req, res) => {
 // Deletes a targeted chat thread along with all its cascading historical messages.
 exports.deleteChat = async (req, res) => {
   const { chatId } = req.params;
-  const userId = req.user.id;
+  const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+  const userId = rawUserId ? String(rawUserId) : null;
 
   try {
     // Delete target chat. The database schema has "ON DELETE CASCADE" for messages

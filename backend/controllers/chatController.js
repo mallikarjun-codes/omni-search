@@ -5,7 +5,8 @@ const { queryCompanyRAG } = require('../services/ragService');
 // Handle RAG Chat Query
 exports.query = async (req, res) => {
   const { query, chatId } = req.body;
-  const userId = req.user ? req.user.id : null;
+  const rawUserId = req.user ? (req.user.id || req.user.userId) : null;
+  const userId = rawUserId ? String(rawUserId) : null;
 
   if (!query) {
     return res.status(400).json({ error: 'Query string is required.' });
