@@ -117,13 +117,13 @@ export default function ChatWindow({ chatId, onChatCreated }) {
   ];
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/40 dark:bg-[#2d2d2d] rounded-2xl border border-white/5 dark:border-[#404040] overflow-hidden backdrop-blur-md">
+    <div className="flex flex-col h-full bg-white dark:bg-[#252525] rounded-2xl border border-slate-200 dark:border-[#333333] overflow-hidden backdrop-blur-md transition-colors duration-300">
       
       {/* Header */}
-      <div className="px-6 py-4 bg-white/5 dark:bg-[#363636] border-b border-white/5 dark:border-[#404040] flex items-center justify-between">
+      <div className="px-6 py-4 bg-slate-50 dark:bg-[#2d2d2d] border-b border-slate-200 dark:border-[#333333] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-brand-400" />
-          <span className="text-sm font-semibold text-slate-200">
+          <Sparkles className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
             {chatId ? `Active Session: ${chatId}` : 'New RAG Session'}
           </span>
         </div>
@@ -141,8 +141,8 @@ export default function ChatWindow({ chatId, onChatCreated }) {
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center mb-6 shadow-xl shadow-brand-500/20">
               <Bot className="w-8 h-8 text-white" />
             </div>
-            <h3 className="text-xl font-bold text-slate-100 font-sans">OmniSearch Intelligent Assistant</h3>
-            <p className="text-sm text-slate-400 mt-2 mb-8 leading-relaxed font-sans">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 font-sans">OmniSearch Intelligent Assistant</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-8 leading-relaxed font-sans">
               Ask me anything about company HR policies, IT security regulations, or business expenses. I search our internal database to provide accurate, cited answers.
             </p>
             
@@ -151,7 +151,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
                 <button
                   key={idx}
                   onClick={() => handleSendQuery(q)}
-                  className="p-3 text-xs text-left text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 hover:border-brand-500/30 rounded-xl transition-all duration-300 glass-hover cursor-pointer font-sans"
+                  className="p-3 text-xs text-left text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 hover:border-brand-400 dark:hover:border-brand-500/30 rounded-xl transition-all duration-300 glass-hover cursor-pointer font-sans"
                 >
                   {q}
                 </button>
@@ -174,7 +174,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
                 <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-4 ${
                   isUser 
                     ? 'bg-gradient-to-br from-brand-600 to-indigo-600 text-white shadow-lg shadow-brand-600/15 rounded-tr-none' 
-                    : 'glass-card text-slate-200 rounded-tl-none'
+                    : 'glass-card text-slate-800 dark:text-slate-200 rounded-tl-none'
                 }`}>
                   {/* Message Content */}
                   <div className="text-sm leading-relaxed whitespace-pre-wrap font-sans prose prose-invert max-w-none">
@@ -238,7 +238,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
               <Bot className="w-4 h-4 text-white" />
             </div>
             
-            <div className="glass-card text-slate-200 rounded-2xl rounded-tl-none px-5 py-4 flex flex-col gap-2">
+            <div className="glass-card text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-none px-5 py-4 flex flex-col gap-2">
               <span className="text-xs text-slate-400 font-mono flex items-center gap-2">
                 AI is searching documents...
               </span>
@@ -254,7 +254,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
       </div>
 
       {/* Input Tray */}
-      <form onSubmit={handleSubmit} className="p-4 bg-white/5 dark:bg-[#363636] border-t border-white/5 dark:border-[#404040]">
+      <form onSubmit={handleSubmit} className="p-4 bg-slate-50 dark:bg-[#2d2d2d] border-t border-slate-200 dark:border-[#333333]">
         <div className="relative flex items-center">
           <input
             type="text"
@@ -262,7 +262,7 @@ export default function ChatWindow({ chatId, onChatCreated }) {
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
             placeholder="Type your question about company policies..."
-            className="w-full glass-input rounded-xl py-3.5 pl-4 pr-12 text-sm text-slate-100 placeholder-slate-500 focus:outline-none font-sans"
+            className="w-full glass-input rounded-xl py-3.5 pl-4 pr-12 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none font-sans"
           />
           <button
             type="submit"

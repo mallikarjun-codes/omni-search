@@ -187,19 +187,19 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-slate-950 dark:bg-[#252525] light:bg-slate-50 text-slate-100 dark:text-slate-200 font-sans transition-colors duration-300">
+    <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-[#f0f2f5] dark:bg-[#232323] text-slate-800 dark:text-slate-200 font-sans transition-colors duration-300">
       
       {/* MOBILE HEADER BAR */}
-      <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-slate-900 dark:bg-[#2d2d2d] border-b border-white/5 dark:border-[#404040] flex-shrink-0">
+      <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-white dark:bg-[#1c1c1c] border-b border-slate-200 dark:border-[#2d2d2d] flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-gradient-to-tr from-brand-600 to-violet-500 p-1.5 rounded-lg flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-sm text-white">OmniSearch</span>
+          <span className="font-bold text-sm text-slate-800 dark:text-white">OmniSearch</span>
         </div>
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-1.5 rounded bg-white/5 border border-white/5 text-slate-300 hover:text-white"
+          className="p-1.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -207,20 +207,20 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
 
       {/* LEFT SIDEBAR (Desktop permanent, Mobile slideover/overlay) */}
       <div className={`
-        fixed inset-y-0 left-0 z-40 lg:relative lg:z-0 lg:flex w-80 flex-col bg-slate-900/50 dark:bg-[#2d2d2d] border-r border-white/5 dark:border-[#404040] h-full transition-transform duration-300 ease-in-out flex-shrink-0 backdrop-blur-md
+        fixed inset-y-0 left-0 z-40 lg:relative lg:z-0 lg:flex w-80 flex-col bg-slate-50 dark:bg-[#1c1c1c] border-r border-slate-200 dark:border-[#2d2d2d] h-full transition-transform duration-300 ease-in-out flex-shrink-0 backdrop-blur-md
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Branding Area */}
-        <div className="p-6 border-b border-white/5 dark:border-[#404040] flex items-center justify-between flex-shrink-0">
+        <div className="p-6 border-b border-slate-200 dark:border-[#2d2d2d] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-tr from-brand-600 to-violet-500 p-2 rounded-xl shadow-lg flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-white font-sans">
+              <h1 className="text-lg font-bold tracking-tight text-slate-800 dark:text-white font-sans">
                 OmniSearch
               </h1>
-              <p className="text-[9px] text-slate-400 font-mono tracking-widest uppercase">Workspace Portal</p>
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono tracking-widest uppercase">Workspace Portal</p>
             </div>
           </div>
           {/* Theme toggle + close sidebar */}
@@ -229,7 +229,7 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              className="p-2 rounded-lg bg-[#363636] hover:bg-[#404040] border border-[#404040] text-slate-300 hover:text-white transition-all duration-200 cursor-pointer flex items-center justify-center"
+              className="p-2 rounded-lg bg-slate-100 dark:bg-[#2d2d2d] border border-slate-200 dark:border-[#333333] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all duration-200 cursor-pointer flex items-center justify-center"
             >
               {theme === 'dark' ? (
                 <Sun className="w-4 h-4 text-amber-400" />
@@ -260,9 +260,9 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
 
         {/* Scrollable Historical Sessions */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-          <span className="text-[10px] font-mono tracking-wider text-slate-500 uppercase px-2">Recent Sessions</span>
+          <span className="text-[10px] font-mono tracking-wider text-slate-500 dark:text-slate-400 px-2 uppercase">Recent Sessions</span>
           {chats.length === 0 ? (
-            <div className="p-6 text-center text-slate-500 text-xs border border-dashed border-white/5 rounded-xl font-sans">
+            <div className="p-6 text-center text-slate-500 dark:text-slate-400 text-xs border border-dashed border-slate-300 dark:border-white/5 rounded-xl font-sans bg-slate-100/50 dark:bg-transparent">
               No active sessions. Start a new one!
             </div>
           ) : (
@@ -278,12 +278,12 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
                   }}
                   className={`w-full group px-3.5 py-3 rounded-xl border flex items-center justify-between transition-all duration-300 cursor-pointer select-none ${
                     isActive
-                      ? 'bg-brand-600/20 border-brand-500/30 text-white font-semibold'
-                      : 'bg-white/0 border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                      ? 'bg-brand-600/10 dark:bg-brand-600/20 border-brand-400/40 dark:border-brand-500/30 text-brand-600 dark:text-white font-semibold'
+                      : 'bg-transparent border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-200'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <MessageSquare className="w-4 h-4 text-brand-400 flex-shrink-0" />
+                    <MessageSquare className="w-4 h-4 text-brand-500 dark:text-brand-400 flex-shrink-0" />
                     <span className="text-xs truncate font-sans text-left">{chat.title}</span>
                   </div>
                   <button
@@ -291,7 +291,7 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
                       e.stopPropagation();
                       handleDeleteChat(chat.id);
                     }}
-                    className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-white/5 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all cursor-pointer flex-shrink-0"
+                    className="p-1 rounded text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-200 dark:hover:bg-white/5 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all cursor-pointer flex-shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -302,7 +302,7 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
         </div>
 
         {/* Lower Navigation Section */}
-        <div className="p-4 border-t border-white/5 dark:border-[#404040] bg-slate-950/20 dark:bg-[#252525]/50 space-y-1.5 flex-shrink-0">
+        <div className="p-4 border-t border-slate-200 dark:border-[#2d2d2d] bg-slate-100/50 dark:bg-[#1e1e1e]/50 space-y-1.5 flex-shrink-0">
           <button
             onClick={() => {
               setActiveView('chat');
@@ -310,8 +310,8 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
             }}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs transition-all duration-300 cursor-pointer font-sans ${
               activeView === 'chat'
-                ? 'bg-white/5 text-brand-300 font-semibold border border-white/5'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-slate-200 dark:bg-white/5 text-slate-800 dark:text-brand-300 font-semibold border border-slate-300 dark:border-white/5 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <MessageSquare className="w-4 h-4" />
@@ -324,8 +324,8 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
             }}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs transition-all duration-300 cursor-pointer font-sans ${
               activeView === 'documents'
-                ? 'bg-white/5 text-brand-300 font-semibold border border-white/5'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-slate-200 dark:bg-white/5 text-slate-800 dark:text-brand-300 font-semibold border border-slate-300 dark:border-white/5 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Database className="w-4 h-4" />
@@ -338,8 +338,8 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
             }}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs transition-all duration-300 cursor-pointer font-sans ${
               activeView === 'profile'
-                ? 'bg-white/5 text-brand-300 font-semibold border border-white/5'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-slate-200 dark:bg-white/5 text-slate-800 dark:text-brand-300 font-semibold border border-slate-300 dark:border-white/5 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <User className="w-4 h-4" />

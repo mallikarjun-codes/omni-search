@@ -71,7 +71,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 dark:bg-[#252525] flex flex-col items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-slate-50 dark:bg-[#1e1e1e] flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
         <div className="w-10 h-10 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mb-4" />
         <span className="text-xs font-mono tracking-widest uppercase">Connecting to Brain...</span>
       </div>
@@ -79,7 +79,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 dark:bg-[#252525] light:bg-slate-50 flex flex-col transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#1e1e1e] flex flex-col transition-colors duration-300">
       {/* Dynamic Background Overlays — hidden in dark/charcoal mode */}
       <div className="fixed inset-0 pointer-events-none z-0 dark:hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-600/5 rounded-full blur-[120px]" />
