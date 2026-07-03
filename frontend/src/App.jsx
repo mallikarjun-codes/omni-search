@@ -63,13 +63,13 @@ export default function App() {
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Navigation */}
-        <Navbar user={user} onLogout={handleLogout} />
+        {/* Navigation - only show if not logged in */}
+        {!token && <Navbar user={user} onLogout={handleLogout} />}
         
         {/* Content */}
-        <main className="flex-1">
+        <main className="flex-1 flex flex-col">
           {token ? (
-            <Dashboard />
+            <Dashboard user={user} onLogout={handleLogout} />
           ) : (
             <Login onAuthSuccess={handleAuthSuccess} />
           )}
