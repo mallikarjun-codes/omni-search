@@ -16,4 +16,14 @@ const upload = multer({
 // @access  Private
 router.post('/upload', auth, upload.single('file'), documentController.upload);
 
+// @route   GET api/documents
+// @desc    Get metadata list of all indexed documents for user
+// @access  Private
+router.get('/', auth, documentController.list);
+
+// @route   DELETE api/documents/:id
+// @desc    Delete a document and clean up vectors
+// @access  Private
+router.delete('/:id', auth, documentController.delete);
+
 module.exports = router;

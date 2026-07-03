@@ -537,9 +537,22 @@ async function saveUser(user) {
 }
 
 // Document & Vector methods
-async function getDocuments() {
-  const res = await pool.query('SELECT * FROM documents ORDER BY uploaded_at DESC');
+async function getDocuments(userId = null) {
+  let res;
+  if (userId) {
+    res = await pool.query('SELECT * FROM documents WHERE user_id = $1 OR user_id IS NULL ORDER BY uploaded_at DESC', [userId]);
+  } else {
+    res = await pool.query('SELECT * FROM documents ORDER BY uploaded_at DESC');
+  }
   return res.rows.map(mapDocumentRow);
+}
+
+function deleteDocumentVectors(docId) {
+  if (localVectorDBInstance && localVectorDBInstance.vectors) {
+    localVectorDBInstance.vectors = localVectorDBInstance.vectors.filter(v => !v.id.startsWith(docId + '_'));
+  }
+  vectorIndex = vectorIndex.filter(v => v.docId !== docId);
+  console.log(`[Database] Cleaned up local fallback vector database for doc: ${docId}`);
 }
 
 async function addDocument(title, content, type, userId = null, customFileName = null, customFileSize = null) {
@@ -669,5 +682,6 @@ module.exports = {
   getDocuments,
   addDocument,
   searchVectors,
-  getEmbedding
+  getEmbedding,
+  deleteDocumentVectors
 };

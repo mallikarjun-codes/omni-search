@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ChatWindow from '../components/ChatWindow';
 import ProfileView from '../components/ProfileView';
+import DocumentManager from '../components/DocumentManager';
 import { 
   Database, 
   Plus, 
@@ -344,86 +345,7 @@ export default function Dashboard({ user, onLogout }) {
         )}
         
         {activeView === 'documents' && (
-          <div className="h-full flex flex-col bg-slate-900/40 border border-white/5 rounded-2xl p-6 overflow-hidden backdrop-blur-md">
-            
-            {/* Header & Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 flex-shrink-0">
-              <div>
-                <h2 className="text-xl font-bold text-white font-sans">Document Indexing Database</h2>
-                <p className="text-xs text-slate-400 mt-1">Manage, analyze and review documents stored in the company RAG vector database.</p>
-              </div>
-              
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl shadow-md transition-all duration-300 cursor-pointer font-sans self-start sm:self-auto"
-              >
-                <Plus className="w-4 h-4" />
-                Index New Document
-              </button>
-            </div>
-
-            {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 flex-shrink-0">
-              <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Database Status</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-sm font-semibold text-slate-200">Online & Secured</span>
-                </div>
-              </div>
-              <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Vector Index Count</span>
-                <span className="text-lg font-bold text-brand-300 block mt-0.5">{documents.length} Indexed</span>
-              </div>
-              <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Storage Provider</span>
-                <span className="text-sm font-semibold text-slate-200 block mt-1.5">PostgreSQL Vector DB</span>
-              </div>
-            </div>
-
-            {/* Scrollable Document Grid */}
-            <div className="flex-1 overflow-y-auto pr-1">
-              {documents.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-8 border border-dashed border-white/5 rounded-2xl text-slate-500 min-h-[300px]">
-                  <Database className="w-12 h-12 text-slate-600 mb-3 animate-pulse" />
-                  <h4 className="text-slate-300 font-semibold text-sm">No indexed knowledge</h4>
-                  <p className="text-xs text-slate-500 mt-1 max-w-sm">Upload documentation and policies to index them in the database and unlock RAG query capabilities.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {documents.map((doc) => (
-                    <div 
-                      key={doc.id} 
-                      className="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-brand-500/30 transition-all duration-300 glass-hover flex flex-col justify-between"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-2.5">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <FileText className="w-5 h-5 text-brand-400 flex-shrink-0" />
-                            <h4 className="text-sm font-bold text-slate-200 truncate">{doc.title}</h4>
-                          </div>
-                          <span className="px-2 py-0.5 rounded bg-white/5 text-[9px] uppercase tracking-wide text-brand-300 border border-white/5 flex-shrink-0">
-                            {doc.type}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                          This document has been fully tokenized, chunked, and embedded into the local vector DB for intent routing.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4 text-[10px] text-slate-500 font-mono">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                          {new Date(doc.date).toLocaleDateString()}
-                        </span>
-                        <span>Size: {doc.charCount || 0} chars</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <DocumentManager user={user} />
         )}
         
         {activeView === 'profile' && (
