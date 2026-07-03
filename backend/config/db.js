@@ -118,94 +118,8 @@ async function getEmbedding(text, model = 'text-embedding-004') {
   }
 }
 
-// Initial seed documents
-const seedDocuments = [
-  {
-    id: "doc_1",
-    title: "HR-01: Employee Benefits & Perks Policy",
-    type: "HR Policy",
-    content: `Employee Benefits & Perks Policy (Version 2026.1)
-
-Welcome to our company. We offer a comprehensive benefits package designed to support our employees' physical, mental, and financial well-being.
-
-1. Health & Wellness Insurance:
-We provide 100% employer-covered health, dental, and vision insurance premiums for all full-time employees. Coverage begins on your first day of employment. Dependents can be added with 70% employer premium coverage.
-
-2. Annual Paid Time Off (PTO):
-All full-time employees receive 25 days of paid annual leave per calendar year. PTO accrues monthly at a rate of 2.08 days. In addition, employees receive 10 standard public holidays and 3 floating holidays for personal or religious observations.
-
-3. Parental Leave:
-We offer up to 12 weeks of fully paid parental leave for birthing, non-birthing, and adoptive parents. This leave can be taken at any point within the first year following the birth or adoption of a child.
-
-4. Remote Work Allowance & Workspace Setup:
-Our company operates on a hybrid-first model. Full-time employees are eligible for:
-- A one-time $500 home office setup stipend to purchase desk, chair, monitors, or accessories.
-- A monthly $50 internet/utility allowance paid out with salary.
-- Co-working space pass reimbursement of up to $200/month if you prefer working outside your home.
-
-For any questions about your benefits, contact the HR team at hr@ourcompany.com.`,
-    date: new Date("2026-01-15").toISOString()
-  },
-  {
-    id: "doc_2",
-    title: "IT-02: Device & Data Security Policy",
-    type: "IT Security",
-    content: `IT Security and Device Management Guidelines (Version 2026.3)
-
-Protecting our client and company data is of paramount importance. This document details the mandatory security protocols for all employees.
-
-1. Password Requirements:
-All system passwords must be managed using the approved corporate password manager (1Password).
-- Passwords must be a minimum of 12 characters.
-- Must contain at least one uppercase letter, one lowercase letter, one number, and one special character.
-- Passwords must be changed annually.
-
-2. Multi-Factor Authentication (MFA):
-MFA is strictly enforced across all corporate systems, including email, AWS, GitHub, and HR portals. You must configure MFA using Okta Verify or Google Authenticator. SMS-based MFA is not permitted due to security vulnerability risks.
-
-3. Virtual Private Network (VPN):
-You must connect to the corporate secure VPN (Cisco AnyConnect) whenever:
-- Accessing internal staging environments or production databases.
-- Working from public Wi-Fi networks (e.g., coffee shops, airports).
-- Accessing sensitive customer files.
-
-4. Device Security & Workstations:
-- Company laptops must run the SentinelOne security agent at all times.
-- Screens must auto-lock after 5 minutes of inactivity.
-- Never leave your work laptop unattended in public areas.
-- USB mass storage devices are disabled on all company laptops by default to prevent data exfiltration.
-
-Report any suspicious activity or phishing emails immediately to security@ourcompany.com.`,
-    date: new Date("2026-03-10").toISOString()
-  },
-  {
-    id: "doc_3",
-    title: "OPS-03: Business Travel and Expense Reimbursement Policy",
-    type: "Operations",
-    content: `Business Travel and Expense Policy (Version 2026.2)
-
-This policy defines the guidelines and procedures for business travel expenses incurred on behalf of the company.
-
-1. Travel Booking:
-All flights, hotels, and train bookings must be made through our official travel partner portal, TravelPerk. 
-- Flights over 6 hours may be booked in Premium Economy. Flights under 6 hours must be booked in Standard Economy.
-- Hotel accommodations should not exceed $200 per night for domestic travel and $300 per night for international travel.
-
-2. Daily Meal Allowances (Per Diem):
-The company provides a maximum daily allowance for meals and incidental expenses:
-- Domestic Travel: $75 per day.
-- International Travel: $100 per day.
-Alcoholic beverages are not eligible for reimbursement unless part of an pre-approved client entertainment dinner.
-
-3. Reimbursement Submission & Receipts:
-- Itemized receipts are required for all expenses exceeding $25. Credit card statements alone are not accepted as proof of purchase.
-- All expense claims must be submitted via Expensify within 30 days of returning from travel.
-- Late submissions (older than 60 days) will be rejected, and expenses will not be reimbursed.
-
-For queries, reach out to finance@ourcompany.com or ask in the #finance Slack channel.`,
-    date: new Date("2026-02-28").toISOString()
-  }
-];
+// Initial seed documents (Disabled to strictly render user-uploaded content)
+const seedDocuments = [];
 
 // Helper: Chunking long text semantically
 function chunkText(text, maxChunkSize = 700, overlap = 100) {
@@ -338,69 +252,7 @@ async function initializeDB() {
       console.warn("WARNING: PINECONE_API_KEY is not defined in environment.");
     }
 
-    // Check documents table
-    const docsRes = await pool.query('SELECT COUNT(*)::int as count FROM documents');
-    const docsNeedSeeding = docsRes.rows[0].count === 0;
-
-    if (docsNeedSeeding) {
-      console.log("[Database] Seeding initial documents...");
-      for (const doc of seedDocuments) {
-        const docId = doc.id;
-        const fileName = `${doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.txt`;
-        const fileSize = Buffer.byteLength(doc.content, 'utf8');
-
-        await pool.query(
-          'INSERT INTO documents (id, user_id, file_name, file_size, uploaded_at, title, type, content) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-          [docId, null, fileName, fileSize, doc.date, doc.title, doc.type, doc.content]
-        );
-
-        // Chunk and upload to Pinecone
-        const chunks = chunkText(doc.content);
-        const recordsToUpsert = [];
-        for (let i = 0; i < chunks.length; i++) {
-          const chunkTextContent = chunks[i];
-          try {
-            const embedding = await getEmbedding(chunkTextContent, 'gemini-embedding-001');
-            const chunkId = `${docId}_chunk_${i}`;
-
-            // Save chunk vector to PostgreSQL vectors table (backup)
-            await pool.query(
-              'INSERT INTO vectors (id, doc_id, doc_title, text, embedding) VALUES ($1, $2, $3, $4, $5)',
-              [chunkId, docId, doc.title, chunkTextContent, JSON.stringify(embedding)]
-            );
-
-            recordsToUpsert.push({
-              id: chunkId,
-              values: embedding,
-              metadata: {
-                user_id: 'system',
-                document_id: docId,
-                doc_title: doc.title,
-                text: chunkTextContent
-              }
-            });
-
-            // LocalVectorDB sync fallback
-            localVectorDBInstance.addRecord(chunkId, chunkTextContent, embedding);
-            vectorIndex.push({
-              id: chunkId,
-              docId: docId,
-              docTitle: doc.title,
-              text: chunkTextContent,
-              embedding: embedding
-            });
-          } catch (err) {
-            console.error(`Failed to embed/index chunk ${i} of doc "${doc.title}":`, err.message);
-          }
-        }
-
-        if (recordsToUpsert.length > 0 && process.env.PINECONE_API_KEY) {
-          const index = pinecone.index(pineconeIndexName);
-          await index.upsert({ records: recordsToUpsert });
-          console.log(`[Database] Seed vectors for "${doc.title}" upserted to Pinecone.`);
-        }
-      }
-    }
+    console.log("[Database] Automatic database seeding is disabled.");
 
     // Check vectors table and restore local arrays from DB
     const vectorsRes = await pool.query('SELECT COUNT(*)::int as count FROM vectors');
@@ -409,7 +261,7 @@ async function initializeDB() {
     localVectorDBInstance.clear();
     vectorIndex = [];
 
-    if (!docsNeedSeeding && vectorsNeedRebuilt) {
+    if (vectorsNeedRebuilt) {
       console.log("[Database] Rebuilding vector embeddings using Gemini...");
       const apiKey = process.env.GEMINI_API_KEY;
       if (apiKey) {
