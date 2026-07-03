@@ -39,9 +39,23 @@ async function queryCompanyRAG(userQuery, currentUserId = null) {
   const ai = new GoogleGenAI({ apiKey });
 
   // 1. Evaluate user query intent
+  // IMPORTANT: Default to RAG. Only route to GENERAL for purely conversational, math, or coding queries.
   let isConversational = false;
   try {
-    const classificationPrompt = `Analyze the following user query and classify it as either "GENERAL" (greetings, conversational chit-chat, general programming help, math, or writing code) or "RAG" (inquiring about company documents, policies, employee benefits, IT security guidelines, device protocols, business travel rules, expense reimbursement, specific custom files, or any general knowledge/factual queries).
+    const classificationPrompt = `You are a query router. Classify the user query below as either "GENERAL" or "RAG".
+
+Route to GENERAL ONLY if the query is:
+- A greeting or small-talk (e.g. "hi", "how are you", "what's up")
+- A pure math calculation (e.g. "what is 2 + 2", "solve x^2 = 4")
+- A request to write or explain code unrelated to any document (e.g. "write a Python hello world")
+
+Route to RAG for EVERYTHING ELSE, including:
+- Any question about a document, PDF, file, notes, or study material the user may have uploaded
+- Questions about topics that could plausibly be covered in an uploaded file (e.g. "how many modules in operating system", "what is the policy on X", "explain chapter 3")
+- Any factual or knowledge question that is NOT pure math or coding
+- Any question mentioning "notes", "pdf", "document", "file", "chapter", "module", "lecture", "syllabus"
+
+When in doubt, always choose RAG.
 
 User Query: "${userQuery}"
 
@@ -50,8 +64,15 @@ Respond with ONLY the word "GENERAL" or "RAG".`;
     const classificationResult = await generateWithFallback(ai, classificationPrompt);
     const result = classificationResult ? classificationResult.trim().toUpperCase() : '';
     console.log(`[ragService] Query classified as: ${result}`);
-    if (result.includes('GENERAL')) {
-      isConversational = true;
+    // Only mark as conversational if the model explicitly says GENERAL AND it doesn't mention documents
+    if (result === 'GENERAL') {
+      const documentKeywords = ['pdf', 'document', 'notes', 'file', 'module', 'chapter', 'lecture', 'syllabus', 'page', 'section', 'topic', 'content'];
+      const queryLower = userQuery.toLowerCase();
+      const mentionsDoc = documentKeywords.some(kw => queryLower.includes(kw));
+      isConversational = !mentionsDoc;
+      if (mentionsDoc) {
+        console.log(`[ragService] Overriding GENERAL to RAG — query mentions document-related keyword.`);
+      }
     }
   } catch (err) {
     console.warn(`[ragService] Classification failed, assuming RAG for safety. Error: ${err.message}`);
@@ -88,6 +109,8 @@ Respond with ONLY the word "GENERAL" or "RAG".`;
         filter: filter
       });
 
+      console.log(`[ragService] Pinecone raw matches: ${JSON.stringify(queryResponse.matches)}`);
+
       matches = queryResponse.matches.map(match => ({
         text: match.metadata ? match.metadata.text : '',
         similarity: match.score || 0
@@ -113,14 +136,24 @@ Respond with ONLY the word "GENERAL" or "RAG".`;
   const context = matches.map(match => match.text).join('\n');
 
   // Construct the strict prompt payload
-  const prompt = `You are an authorized, secure corporate AI assistant. Answer the user's question safely, professionally, and accurately using ONLY the facts provided in the Context section below. 
+  let prompt;
+  if (!context || context.trim().length === 0) {
+    prompt = `You are a corporate AI assistant. The user asked: "${userQuery}"
+
+No relevant documents were found in the database for this query. Politely inform the user that no matching documents are currently available, and suggest they upload a relevant PDF document first so you can answer questions about it.`;
+  } else {
+    prompt = `You are an authorized, secure corporate AI assistant. Answer the user's question accurately and in detail using the facts provided in the Context section below.
 
 Context:
 ${context}
 
 User Question: ${userQuery}
 
-Constraint: If the answer cannot be confidently derived from the provided context, you must strictly reply with: 'I am sorry, but I do not have access to that information in the official company documents.'`;
+Instructions:
+- Answer directly and in full based on the context above.
+- If the context is relevant but incomplete, share what you know from it and mention what might be missing.
+- Only say you do not have access if the context is truly empty or completely unrelated to the question.`;
+  }
 
   // Generate answer with fallback list
   return await generateWithFallback(ai, prompt);

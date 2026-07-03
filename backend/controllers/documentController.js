@@ -20,6 +20,16 @@ exports.upload = async (req, res) => {
       return res.status(400).json({ error: 'Failed to extract text from PDF or PDF is empty.' });
     }
 
+    // Sanitize: remove null bytes and non-printable control chars that cause PostgreSQL encoding errors
+    const sanitizedText = textContent
+      .replace(/\x00/g, '')           // strip null bytes (breaks PostgreSQL text storage)
+      .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ') // replace control chars with space
+      .trim();
+
+    if (!sanitizedText) {
+      return res.status(400).json({ error: 'PDF text content is empty after sanitization.' });
+    }
+
     // Extract fields
     const title = req.body.title || originalName.replace(/\.[^/.]+$/, "");
     const type = req.body.type || 'General Document';
@@ -27,7 +37,7 @@ exports.upload = async (req, res) => {
     const userId = rawUserId ? String(rawUserId) : null;
 
     // Index the document (db.addDocument chunks, embeds, and saves to PostgreSQL)
-    const newDoc = await db.addDocument(title, textContent, type, userId, originalName, fileSize);
+    const newDoc = await db.addDocument(title, sanitizedText, type, userId, originalName, fileSize);
 
     res.status(201).json({
       message: 'PDF document successfully processed, chunked, and indexed.',
