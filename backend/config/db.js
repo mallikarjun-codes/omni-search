@@ -4,11 +4,8 @@ const { Pinecone } = require('@pinecone-database/pinecone');
 
 // PostgreSQL client pool initialization
 const pool = new Pool({
-  host: process.env.PGHOST || 'localhost',
-  port: parseInt(process.env.PGPORT || '5432'),
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || 'postgres',
-  database: process.env.PGDATABASE || 'postgres',
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 // Initialize Pinecone Client
@@ -81,41 +78,26 @@ class LocalVectorDB {
 const localVectorDBInstance = new LocalVectorDB();
 
 // Embed content helper utilizing @google/genai SDK
-async function getEmbedding(text, model = 'text-embedding-004') {
+async function getEmbedding(text, model = 'gemini-embedding-001') {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not defined in environment.");
   }
   const ai = new GoogleGenAI({ apiKey });
-  
-  try {
-    const response = await ai.models.embedContent({
-      model: model,
-      contents: text
-    });
-    if (response.embeddings && response.embeddings[0]) {
-      return response.embeddings[0].values;
-    } else if (response.embedding) {
-      return response.embedding.values;
+
+  const response = await ai.models.embedContent({
+    model: model,
+    contents: text,
+    config: {
+      outputDimensionality: 768
     }
-    throw new Error("Invalid embedding response format");
-  } catch (error) {
-    // If text-embedding-004 fails, fallback to gemini-embedding-001
-    if (model === 'text-embedding-004' && (error.status === 404 || error.message.includes('not found') || error.message.includes('404'))) {
-      console.warn(`[LocalVectorDB] text-embedding-004 not found or supported. Falling back to gemini-embedding-001.`);
-      const fallbackResponse = await ai.models.embedContent({
-        model: 'gemini-embedding-001',
-        contents: text
-      });
-      if (fallbackResponse.embeddings && fallbackResponse.embeddings[0]) {
-        return fallbackResponse.embeddings[0].values;
-      } else if (fallbackResponse.embedding) {
-        return fallbackResponse.embedding.values;
-      }
-      throw new Error("Invalid fallback embedding response format");
-    }
-    throw error;
+  });
+  if (response.embeddings && response.embeddings[0]) {
+    return response.embeddings[0].values;
+  } else if (response.embedding) {
+    return response.embedding.values;
   }
+  throw new Error("Invalid embedding response format");
 }
 
 // Initial seed documents (Disabled to strictly render user-uploaded content)
@@ -176,6 +158,7 @@ async function initializeDB() {
         name VARCHAR(255),
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL DEFAULT 'employee',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -233,7 +216,7 @@ async function initializeDB() {
         console.log(`[Database] Index "${pineconeIndexName}" not found. Creating serverless Pinecone index...`);
         await pinecone.createIndex({
           name: pineconeIndexName,
-          dimension: 3072,
+          dimension: 768,
           metric: 'cosine',
           spec: {
             serverless: {
@@ -272,7 +255,7 @@ async function initializeDB() {
           for (let i = 0; i < chunks.length; i++) {
             const chunkTextContent = chunks[i];
             try {
-              const embedding = await getEmbedding(chunkTextContent, 'gemini-embedding-001');
+              const embedding = await getEmbedding(chunkTextContent);
               const chunkId = `${doc.id}_chunk_${i}`;
               
               await pool.query(
@@ -293,7 +276,6 @@ async function initializeDB() {
                 id: chunkId,
                 values: embedding,
                 metadata: {
-                  user_id: doc.user_id || 'system',
                   document_id: doc.id,
                   doc_title: doc.title,
                   text: chunkTextContent
@@ -342,6 +324,7 @@ function mapUserRow(row) {
     name: row.name,
     email: row.email,
     password: row.password_hash,
+    role: row.role,
     createdAt: row.created_at
   };
 }
@@ -382,20 +365,15 @@ async function getUserById(id) {
 // Save user
 async function saveUser(user) {
   await pool.query(
-    'INSERT INTO users (id, name, email, password_hash, created_at) VALUES ($1, $2, $3, $4, $5)',
-    [user.id, user.name || null, user.email, user.password, user.createdAt || new Date()]
+    'INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    [user.id, user.name || null, user.email, user.password, user.role || 'employee', user.createdAt || new Date()]
   );
   return user;
 }
 
 // Document & Vector methods
-async function getDocuments(userId = null) {
-  let res;
-  if (userId) {
-    res = await pool.query('SELECT * FROM documents WHERE user_id = $1 OR user_id IS NULL ORDER BY uploaded_at DESC', [userId]);
-  } else {
-    res = await pool.query('SELECT * FROM documents ORDER BY uploaded_at DESC');
-  }
+async function getDocuments() {
+  const res = await pool.query('SELECT * FROM documents ORDER BY uploaded_at DESC');
   return res.rows.map(mapDocumentRow);
 }
 
@@ -429,7 +407,7 @@ async function addDocument(title, content, type, userId = null, customFileName =
   for (let i = 0; i < chunks.length; i++) {
     const text = chunks[i];
     try {
-      const embedding = await getEmbedding(text, 'gemini-embedding-001');
+      const embedding = await getEmbedding(text);
       const chunkId = `${docId}_chunk_${i}`;
       
       await pool.query(
@@ -450,7 +428,6 @@ async function addDocument(title, content, type, userId = null, customFileName =
         id: chunkId,
         values: embedding,
         metadata: {
-          user_id: userId || 'system',
           document_id: docId,
           doc_title: title,
           text: text
@@ -478,36 +455,25 @@ async function addDocument(title, content, type, userId = null, customFileName =
   };
 }
 
-// Updated searchVectors to be async and fetch from Pinecone index with user-specific fallback filtering
-async function searchVectors(queryEmbedding, limit = 3, userId = null) {
+async function searchVectors(queryEmbedding, limit = 3) {
   if (process.env.PINECONE_API_KEY) {
     try {
       const index = pinecone.index(pineconeIndexName);
-      
-      // Multi-tenant user filtering
-      const filter = userId ? { user_id: { $in: [userId, 'system'] } } : { user_id: { $eq: 'system' } };
-
       const queryResponse = await index.query({
         vector: queryEmbedding,
         topK: limit,
-        includeMetadata: true,
-        filter: filter
+        includeMetadata: true
       });
-
-      return queryResponse.matches.map(match => {
-        return {
-          docId: match.metadata ? match.metadata.document_id : '',
-          docTitle: match.metadata ? match.metadata.doc_title : '',
-          text: match.metadata ? match.metadata.text : '',
-          similarity: match.score || 0
-        };
-      });
+      return queryResponse.matches.map(match => ({
+        docId: match.metadata ? match.metadata.document_id : '',
+        docTitle: match.metadata ? match.metadata.doc_title : '',
+        text: match.metadata ? match.metadata.text : '',
+        similarity: match.score || 0
+      }));
     } catch (error) {
       console.error("[Database] Pinecone search error, falling back to local search:", error);
     }
   }
-
-  // Fallback to local sync search
   const matches = localVectorDBInstance.search(queryEmbedding, limit);
   return matches.map(match => {
     const originalChunk = vectorIndex.find(c => c.id === match.id);

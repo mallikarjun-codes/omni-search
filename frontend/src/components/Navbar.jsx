@@ -13,9 +13,8 @@ export default function Navbar({ user, onLogout }) {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-brand-300 bg-clip-text text-transparent">
-              Antigravity RAG
+              Enterprise Knowledge Assistant
             </h1>
-            <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">Company Brain v1.0</p>
           </div>
         </div>
 

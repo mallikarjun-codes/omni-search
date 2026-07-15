@@ -249,7 +249,7 @@ export default function DocumentManager({ user }) {
         </div>
       )}
 
-      {/* Drag & Drop File Target Card */}
+      {user?.role === 'admin' && (
       <div className="mb-6 flex-shrink-0">
         <div
           onDragEnter={handleDrag}
@@ -309,18 +309,13 @@ export default function DocumentManager({ user }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Grid Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6 flex-shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 flex-shrink-0">
         <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#2d2d2d] border border-slate-200 dark:border-[#333333]">
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Total Documents</span>
           <span className="text-lg font-bold text-brand-500 dark:text-brand-300 block mt-0.5">{documents.length} Files</span>
-        </div>
-        <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#2d2d2d] border border-slate-200 dark:border-[#333333]">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Personal Uploads</span>
-          <span className="text-lg font-bold text-violet-600 dark:text-violet-300 block mt-0.5">
-            {documents.filter(d => d.userId === user?.id).length} Files
-          </span>
         </div>
         <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#2d2d2d] border border-slate-200 dark:border-[#333333]">
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Total Embedded Chunks</span>
@@ -365,7 +360,6 @@ export default function DocumentManager({ user }) {
             </thead>
             <tbody className="divide-y divide-white/5 text-xs text-slate-300">
               {filteredDocuments.map((doc) => {
-                const isUserDoc = doc.userId === user?.id;
                 return (
                   <tr 
                     key={doc.id}
@@ -391,7 +385,7 @@ export default function DocumentManager({ user }) {
                       {formatDate(doc.date)}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {isUserDoc ? (
+                      {user?.role === 'admin' ? (
                         <button
                           onClick={() => handleDelete(doc.id, doc.title)}
                           title="Delete document and remove vectors"
@@ -401,10 +395,10 @@ export default function DocumentManager({ user }) {
                         </button>
                       ) : (
                         <span 
-                          title="System-seeded default documents cannot be deleted"
+                          title="Admin access required to delete documents"
                           className="px-2.5 py-1 rounded bg-white/5 text-[9px] font-semibold text-slate-500 border border-white/5 cursor-not-allowed uppercase font-mono tracking-wider"
                         >
-                          System
+                          View Only
                         </span>
                       )}
                     </td>

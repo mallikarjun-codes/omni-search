@@ -17,12 +17,16 @@ module.exports = function (req, res, next) {
   const token = parts[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_company_rag_jwt_key_2026');
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET is not configured.');
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     if (req.user) {
       const rawId = decoded.id || decoded.userId;
       req.user.id = rawId ? String(rawId) : undefined;
       req.user.userId = rawId ? String(rawId) : undefined;
+      req.user.role = decoded.role || 'employee';
     }
     next();
   } catch (err) {

@@ -25,35 +25,7 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
   const [activeView, setActiveView] = useState('chat');
   const [chatId, setChatId] = useState(null);
   const [chats, setChats] = useState([]);
-  
-  const [documents, setDocuments] = useState([]);
-  const [docLoading, setDocLoading] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile sidebar toggle
-  
-  // New document form state
-  const [newTitle, setNewTitle] = useState('');
-  const [newType, setNewType] = useState('HR Policy');
-  const [newContent, setNewContent] = useState('');
-  const [uploadError, setUploadError] = useState('');
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-
-  // Fetch document metadata list
-  const fetchDocuments = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/chat/documents`, {
-        headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem("token")
-        }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setDocuments(data || []);
-      }
-    } catch (err) {
-      console.error('Error loading documents:', err);
-    }
-  };
 
   // Fetch user's historical chat sessions
   const fetchChats = async () => {
@@ -78,7 +50,6 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
 
   useEffect(() => {
     fetchChats();
-    fetchDocuments();
   }, []);
 
   // Handle "+ New Chat" button creation trigger
@@ -133,59 +104,6 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
     }
   };
 
-  // Handle new Document Upload/Indexing
-  const handleAddDocument = async (e) => {
-    e.preventDefault();
-    setUploadError('');
-    setUploadSuccess(false);
-    setDocLoading(true);
-
-    if (!newTitle.trim() || !newContent.trim()) {
-      setUploadError('Title and content are required.');
-      setDocLoading(false);
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/api/chat/document`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + localStorage.getItem("token")
-        },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          type: newType,
-          content: newContent.trim()
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Indexing failed');
-      }
-
-      setUploadSuccess(true);
-      setNewTitle('');
-      setNewContent('');
-      
-      // Refresh documents
-      await fetchDocuments();
-
-      // Close modal after a short delay
-      setTimeout(() => {
-        setIsModalOpen(false);
-        setUploadSuccess(false);
-      }, 1500);
-
-    } catch (err) {
-      setUploadError(err.message);
-    } finally {
-      setDocLoading(false);
-    }
-  };
-
   return (
     <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-[#f0f2f5] dark:bg-[#232323] text-slate-800 dark:text-slate-200 font-sans transition-colors duration-300">
       
@@ -195,7 +113,7 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
           <div className="bg-gradient-to-tr from-brand-600 to-violet-500 p-1.5 rounded-lg flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-sm text-slate-800 dark:text-white">OmniSearch</span>
+          <span className="font-bold text-sm text-slate-800 dark:text-white truncate max-w-[220px]">Enterprise Knowledge Assistant</span>
         </div>
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -217,8 +135,8 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-slate-800 dark:text-white font-sans">
-                OmniSearch
+              <h1 className="text-lg font-bold tracking-tight text-slate-800 dark:text-white font-sans leading-tight">
+                Enterprise Knowledge Assistant
               </h1>
               <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono tracking-widest uppercase">Workspace Portal</p>
             </div>
@@ -317,20 +235,22 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
             <MessageSquare className="w-4 h-4" />
             Chat Workspace
           </button>
-          <button
-            onClick={() => {
-              setActiveView('documents');
-              setSidebarOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs transition-all duration-300 cursor-pointer font-sans ${
-              activeView === 'documents'
-                ? 'bg-slate-200 dark:bg-white/5 text-slate-800 dark:text-brand-300 font-semibold border border-slate-300 dark:border-white/5 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            Document Manager
-          </button>
+          {user?.role === 'admin' && (
+            <button
+              onClick={() => {
+                setActiveView('documents');
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs transition-all duration-300 cursor-pointer font-sans ${
+                activeView === 'documents'
+                  ? 'bg-slate-200 dark:bg-white/5 text-slate-800 dark:text-brand-300 font-semibold border border-slate-300 dark:border-white/5 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <Database className="w-4 h-4" />
+              Document Manager
+            </button>
+          )}
           <button
             onClick={() => {
               setActiveView('profile');
@@ -362,7 +282,7 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
           <ChatWindow chatId={chatId} onChatCreated={handleChatCreated} />
         )}
         
-        {activeView === 'documents' && (
+        {activeView === 'documents' && user?.role === 'admin' && (
           <DocumentManager user={user} />
         )}
         
@@ -370,108 +290,6 @@ export default function Dashboard({ user, onLogout, theme, toggleTheme }) {
           <ProfileView user={user} onLogout={onLogout} />
         )}
       </div>
-
-      {/* DOCUMENT INDEX MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md transition-opacity">
-          
-          <div className="w-full max-w-lg glass-card rounded-2xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-brand-400" />
-                <h3 className="font-bold text-slate-200 text-sm tracking-wide uppercase">Index New Knowledge</h3>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <form onSubmit={handleAddDocument} className="p-6 space-y-4">
-              
-              {/* Feedback messages */}
-              {uploadError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
-                  ⚠️ {uploadError}
-                </div>
-              )}
-
-              {uploadSuccess && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Knowledge added and indexed successfully!
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Document Title</label>
-                <input
-                  type="text"
-                  required
-                  disabled={docLoading || uploadSuccess}
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. HR-04: Remote Expense Guidelines"
-                  className="w-full glass-input rounded-xl py-2.5 px-4 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Document Type</label>
-                <select
-                  disabled={docLoading || uploadSuccess}
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value)}
-                  className="w-full glass-input rounded-xl py-2.5 px-4 text-xs text-slate-100 focus:outline-none bg-slate-900 cursor-pointer"
-                >
-                  <option value="HR Policy">HR Policy</option>
-                  <option value="IT Security">IT Security</option>
-                  <option value="Operations">Operations</option>
-                  <option value="General Document">General Document</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Document Content</label>
-                <textarea
-                  rows="6"
-                  required
-                  disabled={docLoading || uploadSuccess}
-                  value={newContent}
-                  onChange={(e) => setNewContent(e.target.value)}
-                  placeholder="Paste or write document policies here. Include clear instructions so RAG can search it correctly..."
-                  className="w-full glass-input rounded-xl py-2.5 px-4 text-xs text-slate-100 placeholder-slate-600 focus:outline-none resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-300 rounded-lg transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                
-                <button
-                  type="submit"
-                  disabled={docLoading || uploadSuccess}
-                  className="px-5 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-md transition-all duration-300 cursor-pointer"
-                >
-                  {docLoading ? 'Analyzing & Embedding...' : 'Index Document'}
-                </button>
-              </div>
-
-            </form>
-
-          </div>
-        </div>
-      )}
     </div>
   );
 }

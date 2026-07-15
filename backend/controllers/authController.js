@@ -26,22 +26,27 @@ exports.register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user object
+    // Create user object — role is always 'employee' on self-registration
     const newUser = {
       id: 'user_' + Date.now(),
       name,
       email,
       password: hashedPassword,
+      role: 'employee',
       createdAt: new Date().toISOString()
     };
 
     // Save user
     await db.saveUser(newUser);
 
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET is not configured.');
+    }
+
     // Create token
     const token = jwt.sign(
-      { id: newUser.id, name: newUser.name, email: newUser.email },
-      process.env.JWT_SECRET || 'super_secret_company_rag_jwt_key_2026',
+      { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role },
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -50,7 +55,8 @@ exports.register = async (req, res) => {
       user: {
         id: newUser.id,
         name: newUser.name,
-        email: newUser.email
+        email: newUser.email,
+        role: newUser.role
       }
     });
   } catch (error) {
@@ -81,10 +87,14 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials. Password does not match.' });
     }
 
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET is not configured.');
+    }
+
     // Create token
     const token = jwt.sign(
-      { id: user.id, name: user.name, email: user.email },
-      process.env.JWT_SECRET || 'super_secret_company_rag_jwt_key_2026',
+      { id: user.id, name: user.name, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -93,7 +103,8 @@ exports.login = async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: user.role
       }
     });
   } catch (error) {
